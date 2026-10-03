@@ -8,6 +8,8 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "react-native-gesture-handler": "*",⁠
+⁠"@react-native-async-storage/async-storage": "*",⁠
     "expo": "~54.0.37",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
