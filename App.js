@@ -9,6 +9,7 @@ import Auth from './Auth';
 export default function App() {
   const [session, setSession] = useState(null);
   const [loadingSession, setLoadingSession] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const [abaAtual, setAbaAtual] = useState('dashboard'); 
   
@@ -66,8 +67,12 @@ export default function App() {
       const categoriasSalvas = await AsyncStorage.getItem('@categorias');
       const metasSalvas = await AsyncStorage.getItem('@metas');
       const nomeSalvo = await AsyncStorage.getItem('@perfilNome');
+      const temaSalvo = await AsyncStorage.getItem('@temaEscuro');
 
+      if (temaSalvo !== null) setIsDarkMode(JSON.parse(temaSalvo));
       if (transacoesSalvas) setTransacoes(JSON.parse(transacoesSalvas));
+      if (nomeSalvo) setPerfilNome(nomeSalvo);
+      if (metasSalvas) setMetas(JSON.parse(metasSalvas));
       
       if (categoriasSalvas) {
         setCategorias(JSON.parse(categoriasSalvas));
@@ -82,13 +87,16 @@ export default function App() {
         setCategorias(categoriasPadrao);
         AsyncStorage.setItem('@categorias', JSON.stringify(categoriasPadrao));
       }
-
-      if (metasSalvas) setMetas(JSON.parse(metasSalvas));
-      if (nomeSalvo) setPerfilNome(nomeSalvo);
-
     } catch (e) {
       console.log('Erro ao carregar dados', e);
     }
+  };
+
+  const toggleTema = async () => {
+    const novoTema = !isDarkMode;
+    setIsDarkMode(novoTema);
+    try { await AsyncStorage.setItem('@temaEscuro', JSON.stringify(novoTema)); } 
+    catch (e) { console.log('Erro ao salvar tema', e); }
   };
 
   const handleLogout = async () => {
@@ -156,12 +164,15 @@ export default function App() {
   const [calAno, setCalAno] = useState(dataHoje.getFullYear());
 
   const nomesMeses = { '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril', '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto', '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro' };
-  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, 'nome': 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
+  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, nome: 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     carregarDados().then(() => setRefreshing(false));
   }, []);
+
+  const styles = dynamicStyles(isDarkMode);
+  const iconColor = isDarkMode ? "#F8FAFC" : "#1E293B";
 
   const transacoesDoMes = transacoes.filter(t => {
     const dataAlvo = t.dataVencimento || t.dataCompra;
@@ -240,15 +251,9 @@ export default function App() {
   
   const selecionarDia = (dia) => {
     const dataFormatada = `${dia.toString().padStart(2, '0')}/${calMes.toString().padStart(2, '0')}/${calAno}`;
-    
-    if (campoDataAtivo === 'meta_alvo') {
-      setNovaMetaDataAlvo(dataFormatada);
-    } else if (campoDataAtivo === 'compra') { 
-      setNovaDataCompra(dataFormatada); 
-      if (!novaDataVencimento || novoTipo === 'entrada') setNovaDataVencimento(dataFormatada); 
-    } else { 
-      setNovaDataVencimento(dataFormatada); 
-    }
+    if (campoDataAtivo === 'meta_alvo') setNovaMetaDataAlvo(dataFormatada);
+    else if (campoDataAtivo === 'compra') { setNovaDataCompra(dataFormatada); if (!novaDataVencimento || novoTipo === 'entrada') setNovaDataVencimento(dataFormatada); } 
+    else setNovaDataVencimento(dataFormatada); 
     setCalendarioVisivel(false);
   };
   
@@ -273,26 +278,13 @@ export default function App() {
   const salvarTransacao = () => {
     if (!novaDescricao || !novoValor) { Platform.OS === 'web' ? window.alert("Preencha a descrição e o valor.") : Alert.alert("Erro", "Preencha a descrição e o valor."); return; }
     if (novaModalidade !== 'fixa' && !novaDataCompra) { Platform.OS === 'web' ? window.alert("Selecione a data da transação.") : Alert.alert("Erro", "Selecione a data da transação."); return; }
-
     const valorTotal = parseFloat(novoValor.replace(',', '.'));
-    let dataBaseCompra = novaDataCompra;
-    let vencimentoBase = novoTipo === 'entrada' ? novaDataCompra : (novaDataVencimento || novaDataCompra);
-
-    if (novoTipo === 'saida' && novaModalidade === 'fixa') {
-      dataBaseCompra = `01/${mesSelecionado}`;
-      vencimentoBase = `01/${mesSelecionado}`;
-    }
-
-    const somarMesesData = (dataStr, qtdMeses) => {
-      const partes = dataStr.split('/'); let d = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1 + qtdMeses, parseInt(partes[0], 10));
-      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-    };
-
+    let dataBaseCompra = novaDataCompra; let vencimentoBase = novoTipo === 'entrada' ? novaDataCompra : (novaDataVencimento || novaDataCompra);
+    if (novoTipo === 'saida' && novaModalidade === 'fixa') { dataBaseCompra = `01/${mesSelecionado}`; vencimentoBase = `01/${mesSelecionado}`; }
+    const somarMesesData = (dataStr, qtdMeses) => { const partes = dataStr.split('/'); let d = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1 + qtdMeses, parseInt(partes[0], 10)); return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`; };
     let transacoesAtualizadas = [];
-
-    if (idEditando) {
-      transacoesAtualizadas = transacoes.map(t => t.id === idEditando ? { ...t, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, categoria: novaCategoriaForm, modalidade: novaModalidade, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase } : t );
-    } else {
+    if (idEditando) { transacoesAtualizadas = transacoes.map(t => t.id === idEditando ? { ...t, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, categoria: novaCategoriaForm, modalidade: novaModalidade, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase } : t ); } 
+    else {
       if (novoTipo === 'saida' && novaModalidade === 'parcelada') {
         const nParcelas = Math.max(parseInt(qtdParcelas, 10) || 2, 2); const valorParcela = parseFloat((valorTotal / nParcelas).toFixed(2)); let novas = [];
         for (let i = 0; i < nParcelas; i++) { novas.push({ id: `${Date.now()}_${i}`, descricao: `${novaDescricao} [${i + 1}/${nParcelas}]`, valor: valorParcela, tipo: 'saida', modalidade: 'parcelada', parcelasInfo: `${i + 1}/${nParcelas}`, categoria: novaCategoriaForm, dataCompra: dataBaseCompra, dataVencimento: somarMesesData(vencimentoBase, i), fixado: false }); }
@@ -306,25 +298,18 @@ export default function App() {
         transacoesAtualizadas = [nova, ...transacoes];
       }
     }
-    atualizarTransacoes(transacoesAtualizadas);
-    fecharModal();
+    atualizarTransacoes(transacoesAtualizadas); fecharModal();
   };
 
   const adicionarCategoria = () => {
     if (!novaCategoriaNome.trim()) { Platform.OS === 'web' ? window.alert('O nome da categoria não pode ficar vazio.') : Alert.alert('Erro', 'O nome da categoria não pode ficar vazio.'); return; }
     const nova = { id: Date.now().toString(), nome: novaCategoriaNome.trim(), cor: novaCategoriaCor };
-    const novasCategorias = [nova, ...categorias];
-    atualizarCategorias(novasCategorias);
-    setNovaCategoriaNome('');
+    atualizarCategorias([nova, ...categorias]); setNovaCategoriaNome('');
   };
 
   const excluirCategoria = (id, nome) => {
     if (nome === 'Renda' || nome === 'Outros') { Platform.OS === 'web' ? window.alert('Esta é uma categoria do sistema e não pode ser apagada.') : Alert.alert('Aviso', 'Esta é uma categoria do sistema e não pode ser apagada.'); return; }
-    const deletar = () => {
-      const novasCategorias = categorias.filter(c => c.id !== id);
-      atualizarCategorias(novasCategorias);
-      if (novaCategoriaForm === nome) setNovaCategoriaForm('Outros');
-    };
+    const deletar = () => { atualizarCategorias(categorias.filter(c => c.id !== id)); if (novaCategoriaForm === nome) setNovaCategoriaForm('Outros'); };
     if (Platform.OS === 'web') { if (window.confirm(`Tem certeza que deseja apagar "${nome}"?`)) { deletar(); } } 
     else { Alert.alert('Apagar Categoria', `Tem certeza que deseja apagar "${nome}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar', style: 'destructive', onPress: deletar }]); }
   };
@@ -344,80 +329,29 @@ export default function App() {
   };
 
   const fecharModalMeta = () => {
-    setModalNovaMetaVisivel(false);
-    setIdEditandoMeta(null);
-    setNovaMetaTitulo('');
-    setNovaMetaAlvo('');
-    setNovaMetaValorAtual('');
-    setNovaMetaCategoria('Outros');
-    setNovaMetaModalidade('a_vista');
-    setNovaMetaMeioPagamento('Pix');
-    setNovaMetaQtdParcelas('2');
-    setNovaMetaOrigemConta('Conta Corrente');
-    setNovaMetaDataAlvo('');
-    setCalendarioVisivel(false);
+    setModalNovaMetaVisivel(false); setIdEditandoMeta(null); setNovaMetaTitulo(''); setNovaMetaAlvo(''); setNovaMetaValorAtual(''); setNovaMetaCategoria('Outros'); setNovaMetaModalidade('a_vista'); setNovaMetaMeioPagamento('Pix'); setNovaMetaQtdParcelas('2'); setNovaMetaOrigemConta('Conta Corrente'); setNovaMetaDataAlvo(''); setCalendarioVisivel(false);
   };
 
   const abrirEdicaoMeta = (meta) => {
-    setIdEditandoMeta(meta.id);
-    setNovaMetaTitulo(meta.titulo);
-    setNovaMetaAlvo(meta.valorAlvo.toString());
-    setNovaMetaValorAtual(meta.valorAtual ? meta.valorAtual.toString() : '0');
-    setNovaMetaCategoria(meta.categoria || 'Outros');
-    setNovaMetaModalidade(meta.modalidade || 'a_vista');
-    setNovaMetaMeioPagamento(meta.meioPagamento || 'Pix');
-    setNovaMetaQtdParcelas(meta.qtdParcelas || '2');
-    setNovaMetaOrigemConta(meta.origemConta || 'Conta Corrente');
-    setNovaMetaDataAlvo(meta.dataAlvo || '');
-    setModalNovaMetaVisivel(true);
+    setIdEditandoMeta(meta.id); setNovaMetaTitulo(meta.titulo); setNovaMetaAlvo(meta.valorAlvo.toString()); setNovaMetaValorAtual(meta.valorAtual ? meta.valorAtual.toString() : '0'); setNovaMetaCategoria(meta.categoria || 'Outros'); setNovaMetaModalidade(meta.modalidade || 'a_vista'); setNovaMetaMeioPagamento(meta.meioPagamento || 'Pix'); setNovaMetaQtdParcelas(meta.qtdParcelas || '2'); setNovaMetaOrigemConta(meta.origemConta || 'Conta Corrente'); setNovaMetaDataAlvo(meta.dataAlvo || ''); setModalNovaMetaVisivel(true);
   };
 
   const excluirMeta = (id) => {
     const deletar = () => atualizarMetas(metas.filter(m => m.id !== id));
-    if (Platform.OS === 'web') { if (window.confirm("Deseja apagar esta meta?")) deletar(); } 
-    else { Alert.alert("Excluir", "Deseja apagar esta meta?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
+    if (Platform.OS === 'web') { if (window.confirm("Deseja apagar esta meta?")) deletar(); } else { Alert.alert("Excluir", "Deseja apagar esta meta?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
   };
 
-  const alternarFixarMeta = (id) => {
-    atualizarMetas(metas.map(m => m.id === id ? { ...m, fixado: !m.fixado } : m));
-  };
+  const alternarFixarMeta = (id) => { atualizarMetas(metas.map(m => m.id === id ? { ...m, fixado: !m.fixado } : m)); };
 
   const salvarMeta = () => {
-    if (!novaMetaTitulo || !novaMetaAlvo || !novaMetaDataAlvo) { 
-      Platform.OS === 'web' ? window.alert("Preencha o título, o valor alvo e a data planejada!") : Alert.alert("Erro", "Preencha o título, o valor alvo e a data planejada!"); 
-      return; 
-    }
-    
+    if (!novaMetaTitulo || !novaMetaAlvo || !novaMetaDataAlvo) { Platform.OS === 'web' ? window.alert("Preencha o título, o valor alvo e a data planejada!") : Alert.alert("Erro", "Preencha o título, o valor alvo e a data planejada!"); return; }
     const catEncontrada = categorias.find(c => c.nome === novaMetaCategoria);
     const corSelecionada = catEncontrada ? catEncontrada.cor : '#3B82F6';
-
-    const objMeta = {
-      titulo: novaMetaTitulo,
-      valorAlvo: parseFloat(novaMetaAlvo.replace(',', '.')),
-      categoria: novaMetaCategoria,
-      modalidade: novaMetaModalidade,
-      meioPagamento: novaMetaMeioPagamento,
-      qtdParcelas: novaMetaModalidade === 'parcelada' ? novaMetaQtdParcelas : null,
-      origemConta: novaMetaOrigemConta,
-      dataAlvo: novaMetaDataAlvo,
-      cor: corSelecionada
-    };
-
+    const objMeta = { titulo: novaMetaTitulo, valorAlvo: parseFloat(novaMetaAlvo.replace(',', '.')), categoria: novaMetaCategoria, modalidade: novaMetaModalidade, meioPagamento: novaMetaMeioPagamento, qtdParcelas: novaMetaModalidade === 'parcelada' ? novaMetaQtdParcelas : null, origemConta: novaMetaOrigemConta, dataAlvo: novaMetaDataAlvo, cor: corSelecionada };
     if (idEditandoMeta) {
-      const metasAtualizadas = metas.map(m => m.id === idEditandoMeta ? {
-        ...m,
-        ...objMeta,
-        valorAtual: parseFloat((novaMetaValorAtual || '0').replace(',', '.'))
-      } : m);
-      atualizarMetas(metasAtualizadas);
+      atualizarMetas(metas.map(m => m.id === idEditandoMeta ? { ...m, ...objMeta, valorAtual: parseFloat((novaMetaValorAtual || '0').replace(',', '.')) } : m));
     } else {
-      const nova = { 
-        id: Date.now().toString(), 
-        ...objMeta,
-        valorAtual: 0, 
-        fixado: false
-      };
-      atualizarMetas([nova, ...metas]);
+      atualizarMetas([{ id: Date.now().toString(), ...objMeta, valorAtual: 0, fixado: false }, ...metas]);
     }
     fecharModalMeta();
   };
@@ -425,35 +359,12 @@ export default function App() {
   const depositarNaMeta = () => {
     if (!valorDeposito) return; 
     const valorNum = parseFloat(valorDeposito.replace(',', '.'));
-    
-    const novasMetas = metas.map(m => { 
-      if (m.id === metaSelecionada.id) return { ...m, valorAtual: m.valorAtual + valorNum }; 
-      return m; 
-    });
-    atualizarMetas(novasMetas);
-
+    atualizarMetas(metas.map(m => m.id === metaSelecionada.id ? { ...m, valorAtual: m.valorAtual + valorNum } : m));
     if (origemDeposito === 'carteira') {
-      const hoje = new Date();
-      const dataHojeFormatada = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
-      
-      const novaTransacao = {
-        id: Date.now().toString() + '_dep',
-        descricao: `Depósito: ${metaSelecionada.titulo}`,
-        valor: valorNum,
-        tipo: 'saida',
-        modalidade: 'a_vista',
-        categoria: metaSelecionada.categoria || 'Outros',
-        dataCompra: dataHojeFormatada,
-        dataVencimento: dataHojeFormatada,
-        fixado: false
-      };
-      atualizarTransacoes([novaTransacao, ...transacoes]);
+      const hoje = new Date(); const dataHojeFormatada = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
+      atualizarTransacoes([{ id: Date.now().toString() + '_dep', descricao: `Depósito: ${metaSelecionada.titulo}`, valor: valorNum, tipo: 'saida', modalidade: 'a_vista', categoria: metaSelecionada.categoria || 'Outros', dataCompra: dataHojeFormatada, dataVencimento: dataHojeFormatada, fixado: false }, ...transacoes]);
     }
-
-    setModalDepositarVisivel(false); 
-    setValorDeposito(''); 
-    setMetaSelecionada(null);
-    setOrigemDeposito('carteira');
+    setModalDepositarVisivel(false); setValorDeposito(''); setMetaSelecionada(null); setOrigemDeposito('carteira');
     Platform.OS === 'web' ? window.alert("Dinheiro guardado com sucesso!") : Alert.alert("Sucesso", "Dinheiro guardado com sucesso!");
   };
 
@@ -470,7 +381,7 @@ export default function App() {
       Platform.OS === 'web' ? window.alert('Perfil atualizado!') : Alert.alert('Sucesso', 'Perfil atualizado!'); 
       setModalEditarPerfilVisivel(false);
     } catch (e) { console.log('Erro ao salvar perfil', e); }
-  }
+  };
 
   const getTopBarTitle = () => {
     if (abaAtual === 'dashboard') return 'Dashboard';
@@ -482,26 +393,20 @@ export default function App() {
   };
 
   if (loadingSession) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-      </View>
-    );
+    return (<View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color="#3B82F6" /></View>);
   }
 
-  if (!session) {
-    return <Auth onLoginSuccess={(user) => setSession({ user })} />;
-  }
+  if (!session) { return <Auth onLoginSuccess={(user) => setSession({ user })} />; }
 
   const renderDashboard = () => (
     <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <View style={styles.monthSelectorContainer}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color="#1E293B" style={{ marginLeft: 5 }} /></TouchableOpacity></View>
+      <View style={styles.monthSelectorContainer}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color={iconColor} style={{ marginLeft: 5 }} /></TouchableOpacity></View>
       <View style={styles.cardsContainer}>
-        <View style={[styles.summaryCard, { backgroundColor: '#F0FDF4' }]}><View><Text style={[styles.summaryLabel, { color: '#15803D' }]}>Receitas</Text><Text style={[styles.summaryValue, { color: '#15803D' }]}>R$ {receitas.toFixed(2).replace('.', ',')}</Text></View><Feather name="arrow-up-circle" size={28} color="#15803D" /></View>
-        <View style={[styles.summaryCard, { backgroundColor: '#FEF2F2' }]}><View><Text style={[styles.summaryLabel, { color: '#B91C1C' }]}>Despesas</Text><Text style={[styles.summaryValue, { color: '#B91C1C' }]}>R$ {despesas.toFixed(2).replace('.', ',')}</Text></View><Feather name="arrow-down-circle" size={28} color="#B91C1C" /></View>
-        <View style={[styles.summaryCard, { backgroundColor: '#EFF6FF' }]}><View><Text style={[styles.summaryLabel, { color: '#1D4ED8' }]}>Saldo do Mês</Text><Text style={[styles.summaryValue, { color: '#1D4ED8' }]}>R$ {saldo.toFixed(2).replace('.', ',')}</Text></View><Feather name="credit-card" size={28} color="#1D4ED8" /></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#064E3B' : '#F0FDF4' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#34D399' : '#15803D' }]}>Receitas</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#34D399' : '#15803D' }]}>R$ {receitas.toFixed(2).replace('.', ',')}</Text></View><Feather name="arrow-up-circle" size={28} color={isDarkMode ? '#34D399' : '#15803D'} /></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#7F1D1D' : '#FEF2F2' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#F87171' : '#B91C1C' }]}>Despesas</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#F87171' : '#B91C1C' }]}>R$ {despesas.toFixed(2).replace('.', ',')}</Text></View><Feather name="arrow-down-circle" size={28} color={isDarkMode ? '#F87171' : '#B91C1C'} /></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]}>Saldo do Mês</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]}>R$ {saldo.toFixed(2).replace('.', ',')}</Text></View><Feather name="credit-card" size={28} color={isDarkMode ? '#60A5FA' : '#1D4ED8'} /></View>
       </View>
-      <View style={styles.chartSection}><Text style={styles.sectionTitle}>Progresso do Orçamento</Text><View style={styles.chartBox}><Text style={styles.chartLabel}>Você comprometeu <Text style={{fontWeight: 'bold', color: '#B91C1C'}}>{porcentagemLimitada.toFixed(0)}%</Text> das receitas.</Text><View style={styles.barraFundo}><View style={[styles.barraProgresso, { width: `${porcentagemLimitada}%` }]} /></View></View></View>
+      <View style={styles.chartSection}><Text style={styles.sectionTitle}>Progresso do Orçamento</Text><View style={styles.chartBox}><Text style={styles.chartLabel}>Você comprometeu <Text style={{fontWeight: 'bold', color: isDarkMode ? '#F87171' : '#B91C1C'}}>{porcentagemLimitada.toFixed(0)}%</Text> das receitas.</Text><View style={styles.barraFundo}><View style={[styles.barraProgresso, { width: `${porcentagemLimitada}%` }]} /></View></View></View>
       <View style={styles.categoriasSection}><Text style={styles.sectionTitle}>Despesas por Categoria</Text><View style={styles.categoriasListContainer}>{despesasAgrupadas.length === 0 ? (<Text style={styles.textoVazio}>Nenhum gasto neste mês.</Text>) : (despesasAgrupadas.map((item, index) => { const catObj = categorias.find(c => c.nome === item.nome); const cor = catObj ? catObj.cor : '#94A3B8'; return (<View key={index} style={styles.catRow}><View style={styles.catLeft}><View style={[styles.catBolinha, { backgroundColor: cor }]} /><Text style={styles.catNome}>{item.nome}</Text></View><View style={styles.catRight}><Text style={styles.catValor}>R$ {item.total.toFixed(2)}</Text><Text style={styles.catPercent}>{item.porcentagem.toFixed(0)}%</Text></View></View>) }))}</View></View>
       <View style={{height: 100}} /> 
     </ScrollView>
@@ -509,15 +414,9 @@ export default function App() {
 
   const renderExtrato = () => {
     let mapaGrupos = {};
-    transacoesOrdenadasDoMes.forEach(t => {
-      if (!mapaGrupos[t.categoria]) { const catObj = categorias.find(c => c.nome === t.categoria); mapaGrupos[t.categoria] = { nome: t.categoria, cor: catObj ? catObj.cor : '#94A3B8', transacoes: [], totalEntrada: 0, totalSaida: 0 }; }
-      mapaGrupos[t.categoria].transacoes.push(t);
-      if (t.tipo === 'entrada') mapaGrupos[t.categoria].totalEntrada += t.valor; else mapaGrupos[t.categoria].totalSaida += t.valor;
-    });
-
+    transacoesOrdenadasDoMes.forEach(t => { if (!mapaGrupos[t.categoria]) { const catObj = categorias.find(c => c.nome === t.categoria); mapaGrupos[t.categoria] = { nome: t.categoria, cor: catObj ? catObj.cor : '#94A3B8', transacoes: [], totalEntrada: 0, totalSaida: 0 }; } mapaGrupos[t.categoria].transacoes.push(t); if (t.tipo === 'entrada') mapaGrupos[t.categoria].totalEntrada += t.valor; else mapaGrupos[t.categoria].totalSaida += t.valor; });
     const gruposArray = Object.values(mapaGrupos).sort((a,b) => (b.totalSaida + b.totalEntrada) - (a.totalSaida + a.totalEntrada));
     const alternarCategoria = (catNome) => { setCategoriasExpandidas(prev => ({ ...prev, [catNome]: !prev[catNome] })); };
-
     const renderCardTransacao = (item) => {
       const renderRight = () => (<View style={styles.rightActions}><TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicao(item)}><Text style={styles.textoAcao}>✏️</Text></TouchableOpacity><TouchableOpacity style={styles.btnExcluir} onPress={() => excluirTransacao(item.id)}><Text style={styles.textoAcao}>🗑️</Text></TouchableOpacity></View>);
       const renderLeft = () => (<View style={styles.leftActions}><TouchableOpacity style={styles.btnFixar} onPress={() => alternarFixar(item.id)}><Text style={styles.textoAcao}>{item.fixado ? 'Desfixar' : '📌 Fixar'}</Text></TouchableOpacity></View>);
@@ -529,17 +428,16 @@ export default function App() {
         </View>
       );
     };
-
     return (
       <ScrollView style={styles.extratoContainer} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View style={styles.extratoHeader}><View><Text style={styles.extratoTitle}>Extrato Agrupado</Text><Text style={styles.extratoSubtitle}>Movimentações organizadas</Text></View><TouchableOpacity style={styles.btnExportar} onPress={() => Platform.OS === 'web' ? window.alert('Gerando PDF...') : Alert.alert('Exportar Extrato', `Gerando PDF...`)}><Feather name="file-text" size={18} color="#FFF" /><Text style={styles.btnExportarText}>Gerar PDF</Text></TouchableOpacity></View>
-        <View style={styles.extratoMonthSelector}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color="#1E293B" style={{ marginLeft: 5 }} /></TouchableOpacity></View>
+        <View style={styles.extratoMonthSelector}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color={iconColor} style={{ marginLeft: 5 }} /></TouchableOpacity></View>
         <View style={{ paddingHorizontal: 20, paddingBottom: 120, marginTop: 10 }}>
            {gruposArray.length === 0 ? (<Text style={styles.textoVazio}>Nenhuma movimentação neste mês.</Text>) : (gruposArray.map(grupo => {
                  const isExpandido = categoriasExpandidas[grupo.nome]; const saldoFinalCategoria = grupo.totalEntrada - grupo.totalSaida;
                  return (
                     <View key={grupo.nome} style={styles.grupoContainer}>
-                       <TouchableOpacity style={styles.grupoHeader} onPress={() => alternarCategoria(grupo.nome)} activeOpacity={0.8}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={[styles.catBolinha, { backgroundColor: grupo.cor }]} /><Text style={styles.grupoTitulo}>{grupo.nome}</Text><Text style={styles.grupoQtd}>({grupo.transacoes.length})</Text></View><View style={{flexDirection: 'row', alignItems: 'center'}}><Text style={[styles.grupoTotal, saldoFinalCategoria >= 0 ? styles.verde : styles.vermelho]}>R$ {Math.abs(saldoFinalCategoria).toFixed(2)}</Text><Feather name={isExpandido ? "chevron-up" : "chevron-down"} size={20} color="#94A3B8" style={{marginLeft: 10}} /></View></TouchableOpacity>
+                       <TouchableOpacity style={styles.grupoHeader} onPress={() => alternarCategoria(grupo.nome)} activeOpacity={0.8}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={[styles.catBolinha, { backgroundColor: grupo.cor }]} /><Text style={styles.grupoTitulo}>{grupo.nome}</Text><Text style={styles.grupoQtd}>({grupo.transacoes.length})</Text></View><View style={{flexDirection: 'row', alignItems: 'center'}}><Text style={[styles.grupoTotal, saldoFinalCategoria >= 0 ? styles.verde : styles.vermelho]}>R$ {Math.abs(saldoFinalCategoria).toFixed(2)}</Text><Feather name={isExpandido ? "chevron-up" : "chevron-down"} size={20} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{marginLeft: 10}} /></View></TouchableOpacity>
                        {isExpandido && (<View style={styles.grupoConteudo}>{grupo.transacoes.map(t => renderCardTransacao(t))}</View>)}
                     </View>
                  )
@@ -561,21 +459,21 @@ export default function App() {
         <Text style={styles.perfilSectionTitle}>Minha Conta</Text>
         <TouchableOpacity style={styles.perfilOpcaoBtn} onPress={() => setModalEditarPerfilVisivel(true)}>
           <View style={styles.perfilOpcaoLeft}>
-            <View style={[styles.perfilIconBox, { backgroundColor: '#EFF6FF' }]}><Feather name="edit-2" size={20} color="#3B82F6" /></View>
+            <View style={[styles.perfilIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}><Feather name="edit-2" size={20} color={isDarkMode ? '#60A5FA' : '#3B82F6'} /></View>
             <Text style={styles.perfilOpcaoTexto}>Editar Perfil</Text>
           </View>
-          <Feather name="chevron-right" size={20} color="#CBD5E1" />
+          <Feather name="chevron-right" size={20} color={isDarkMode ? '#475569' : '#CBD5E1'} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.perfilOpcaoBtn} onPress={() => setModalSegurancaVisivel(true)}>
           <View style={styles.perfilOpcaoLeft}>
-            <View style={[styles.perfilIconBox, { backgroundColor: '#FEF2F2' }]}><Feather name="shield" size={20} color="#EF4444" /></View>
+            <View style={[styles.perfilIconBox, { backgroundColor: isDarkMode ? '#7F1D1D' : '#FEF2F2' }]}><Feather name="shield" size={20} color={isDarkMode ? '#F87171' : '#EF4444'} /></View>
             <Text style={styles.perfilOpcaoTexto}>Segurança e Senhas</Text>
           </View>
-          <Feather name="chevron-right" size={20} color="#CBD5E1" />
+          <Feather name="chevron-right" size={20} color={isDarkMode ? '#475569' : '#CBD5E1'} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.perfilOpcaoBtn}>
           <View style={styles.perfilOpcaoLeft}>
-            <View style={[styles.perfilIconBox, { backgroundColor: '#F0FDF4' }]}><Feather name="credit-card" size={20} color="#10B981" /></View>
+            <View style={[styles.perfilIconBox, { backgroundColor: isDarkMode ? '#064E3B' : '#F0FDF4' }]}><Feather name="credit-card" size={20} color={isDarkMode ? '#34D399' : '#10B981'} /></View>
             <Text style={styles.perfilOpcaoTexto}>Assinatura (Premium)</Text>
           </View>
           <Text style={styles.perfilTagFree}>Plano Grátis</Text>
@@ -583,19 +481,21 @@ export default function App() {
       </View>
       <View style={styles.perfilSectionContainer}>
         <Text style={styles.perfilSectionTitle}>Aplicativo</Text>
-        <TouchableOpacity style={styles.perfilOpcaoBtn}>
+        
+        <TouchableOpacity style={styles.perfilOpcaoBtn} onPress={toggleTema}>
           <View style={styles.perfilOpcaoLeft}>
-            <View style={[styles.perfilIconBox, { backgroundColor: '#F1F5F9' }]}><Feather name="moon" size={20} color="#64748B" /></View>
+            <View style={[styles.perfilIconBox, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}><Feather name="moon" size={20} color={iconColor} /></View>
             <Text style={styles.perfilOpcaoTexto}>Modo Escuro</Text>
           </View>
-          <Feather name="toggle-left" size={24} color="#CBD5E1" />
+          <Switch trackColor={{ false: "#CBD5E1", true: "#3B82F6" }} thumbColor="#FFFFFF" onValueChange={toggleTema} value={isDarkMode} />
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.perfilOpcaoBtn}>
           <View style={styles.perfilOpcaoLeft}>
-            <View style={[styles.perfilIconBox, { backgroundColor: '#F1F5F9' }]}><Feather name="help-circle" size={20} color="#64748B" /></View>
+            <View style={[styles.perfilIconBox, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}><Feather name="help-circle" size={20} color={iconColor} /></View>
             <Text style={styles.perfilOpcaoTexto}>Central de Ajuda</Text>
           </View>
-          <Feather name="chevron-right" size={20} color="#CBD5E1" />
+          <Feather name="chevron-right" size={20} color={isDarkMode ? '#475569' : '#CBD5E1'} />
         </TouchableOpacity>
       </View>
       <TouchableOpacity style={styles.btnSair} onPress={handleLogout}>
@@ -608,47 +508,31 @@ export default function App() {
 
   const renderVisaoAnual = () => {
     const dados = gerarDadosAnuais(anoVisaoAnual); const totalReceitasAno = dados.reduce((acc, curr) => acc + curr.receitas, 0); const totalDespesasAno = dados.reduce((acc, curr) => acc + curr.despesas, 0); const saldoAno = totalReceitasAno - totalDespesasAno; const maxValorGrafico = Math.max(...dados.map(d => Math.max(d.receitas, d.despesas)), 1);
-    return (<View style={styles.extratoContainer}><View style={styles.extratoHeader}><View><Text style={styles.extratoTitle}>Visão Anual</Text><Text style={styles.extratoSubtitle}>Evolução financeira em {anoVisaoAnual}</Text></View></View><View style={styles.extratoMonthSelector}><View style={{ flexDirection: 'row', alignItems: 'center' }}><TouchableOpacity style={{ padding: 10 }} onPress={() => setAnoVisaoAnual(anoVisaoAnual - 1)}><Feather name="chevron-left" size={24} color="#1E293B" /></TouchableOpacity><Text style={{ fontSize: 20, fontWeight: 'bold', marginHorizontal: 15, color: '#1E293B' }}>{anoVisaoAnual}</Text><TouchableOpacity style={{ padding: 10 }} onPress={() => setAnoVisaoAnual(anoVisaoAnual + 1)}><Feather name="chevron-right" size={24} color="#1E293B" /></TouchableOpacity></View></View><View style={styles.extratoResumoBoxes}><View style={styles.extratoResumoItem}><Text style={styles.extratoResumoLabel}>Entradas Anuais</Text><Text style={[styles.extratoResumoValor, styles.verde]}>R$ {totalReceitasAno.toFixed(0)}</Text></View><View style={styles.extratoResumoItem}><Text style={styles.extratoResumoLabel}>Saídas Anuais</Text><Text style={[styles.extratoResumoValor, styles.vermelho]}>R$ {totalDespesasAno.toFixed(0)}</Text></View></View><View style={{ paddingHorizontal: 20, marginBottom: 15 }}><Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 5 }}>Balanço do Ano</Text><Text style={{ fontSize: 14, color: saldoAno >= 0 ? '#15803D' : '#B91C1C' }}>{saldoAno >= 0 ? 'Você economizou ' : 'Você gastou a mais '}R$ {Math.abs(saldoAno).toFixed(2)}</Text></View><View style={styles.graficoAnualContainer}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 10, alignItems: 'flex-end', height: 220 }}>{dados.map((item, index) => { const heightRec = (item.receitas / maxValorGrafico) * 150; const heightDesp = (item.despesas / maxValorGrafico) * 150; return (<View key={index} style={styles.graficoMesColuna}><View style={styles.graficoBarrasContainer}><View style={[styles.graficoBarra, styles.bgVerde, { height: heightRec > 0 ? heightRec : 4 }]} /><View style={[styles.graficoBarra, styles.bgVermelho, { height: heightDesp > 0 ? heightDesp : 4 }]} /></View><Text style={styles.graficoMesLabel}>{item.mes}</Text></View>); })}</ScrollView></View><View style={styles.graficoLegenda}><View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}><View style={[styles.catBolinha, styles.bgVerde]} /><Text style={{fontSize: 12, color: '#64748B'}}>Receitas</Text></View><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={[styles.catBolinha, styles.bgVermelho]} /><Text style={{fontSize: 12, color: '#64748B'}}>Despesas</Text></View></View></View>);
+    return (<View style={styles.extratoContainer}><View style={styles.extratoHeader}><View><Text style={styles.extratoTitle}>Visão Anual</Text><Text style={styles.extratoSubtitle}>Evolução financeira em {anoVisaoAnual}</Text></View></View><View style={styles.extratoMonthSelector}><View style={{ flexDirection: 'row', alignItems: 'center' }}><TouchableOpacity style={{ padding: 10 }} onPress={() => setAnoVisaoAnual(anoVisaoAnual - 1)}><Feather name="chevron-left" size={24} color={iconColor} /></TouchableOpacity><Text style={{ fontSize: 20, fontWeight: 'bold', marginHorizontal: 15, color: isDarkMode ? '#F8FAFC' : '#1E293B' }}>{anoVisaoAnual}</Text><TouchableOpacity style={{ padding: 10 }} onPress={() => setAnoVisaoAnual(anoVisaoAnual + 1)}><Feather name="chevron-right" size={24} color={iconColor} /></TouchableOpacity></View></View><View style={styles.extratoResumoBoxes}><View style={styles.extratoResumoItem}><Text style={styles.extratoResumoLabel}>Entradas Anuais</Text><Text style={[styles.extratoResumoValor, styles.verde]}>R$ {totalReceitasAno.toFixed(0)}</Text></View><View style={styles.extratoResumoItem}><Text style={styles.extratoResumoLabel}>Saídas Anuais</Text><Text style={[styles.extratoResumoValor, styles.vermelho]}>R$ {totalDespesasAno.toFixed(0)}</Text></View></View><View style={{ paddingHorizontal: 20, marginBottom: 15 }}><Text style={{ fontSize: 16, fontWeight: 'bold', color: isDarkMode ? '#F8FAFC' : '#1E293B', marginBottom: 5 }}>Balanço do Ano</Text><Text style={{ fontSize: 14, color: saldoAno >= 0 ? (isDarkMode ? '#34D399' : '#15803D') : (isDarkMode ? '#F87171' : '#B91C1C') }}>{saldoAno >= 0 ? 'Você economizou ' : 'Você gastou a mais '}R$ {Math.abs(saldoAno).toFixed(2)}</Text></View><View style={styles.graficoAnualContainer}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 10, alignItems: 'flex-end', height: 220 }}>{dados.map((item, index) => { const heightRec = (item.receitas / maxValorGrafico) * 150; const heightDesp = (item.despesas / maxValorGrafico) * 150; return (<View key={index} style={styles.graficoMesColuna}><View style={styles.graficoBarrasContainer}><View style={[styles.graficoBarra, styles.bgVerde, { height: heightRec > 0 ? heightRec : 4 }]} /><View style={[styles.graficoBarra, styles.bgVermelho, { height: heightDesp > 0 ? heightDesp : 4 }]} /></View><Text style={styles.graficoMesLabel}>{item.mes}</Text></View>); })}</ScrollView></View><View style={styles.graficoLegenda}><View style={{flexDirection: 'row', alignItems: 'center', marginRight: 20}}><View style={[styles.catBolinha, styles.bgVerde]} /><Text style={{fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B'}}>Receitas</Text></View><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={[styles.catBolinha, styles.bgVermelho]} /><Text style={{fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B'}}>Despesas</Text></View></View></View>);
   };
 
   const renderMetas = () => {
     const totalGuardadoGeral = metas.reduce((acc, m) => acc + (m.valorAtual || 0), 0);
-    const metasOrdenadas = [...metas].sort((a, b) => {
-      if (a.fixado && !b.fixado) return -1;
-      if (!a.fixado && b.fixado) return 1;
-      return 0;
-    });
-
+    const metasOrdenadas = [...metas].sort((a, b) => { if (a.fixado && !b.fixado) return -1; if (!a.fixado && b.fixado) return 1; return 0; });
     return (
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View style={styles.metasHeader}>
           <Text style={styles.metasHeaderLabel}>Total Guardado</Text>
           <Text style={styles.metasHeaderValor}>R$ {totalGuardadoGeral.toFixed(2)}</Text>
-          <TouchableOpacity style={styles.btnNovaMeta} onPress={() => setModalNovaMetaVisivel(true)}>
-            <Feather name="plus-circle" size={20} color="#FFF" />
-            <Text style={styles.btnNovaMetaTexto}>Criar Nova Meta</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={styles.btnNovaMeta} onPress={() => setModalNovaMetaVisivel(true)}><Feather name="plus-circle" size={20} color="#FFF" /><Text style={styles.btnNovaMetaTexto}>Criar Nova Meta</Text></TouchableOpacity>
         </View>
-        
         {metasOrdenadas.map((meta) => { 
           const porcentagem = Math.min(((meta.valorAtual || 0) / (meta.valorAlvo || 1)) * 100, 100); 
           const renderRightMeta = () => (<View style={styles.rightActions}><TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicaoMeta(meta)}><Text style={styles.textoAcao}>✏️</Text></TouchableOpacity><TouchableOpacity style={styles.btnExcluir} onPress={() => excluirMeta(meta.id)}><Text style={styles.textoAcao}>🗑️</Text></TouchableOpacity></View>);
           const renderLeftMeta = () => (<View style={styles.leftActions}><TouchableOpacity style={styles.btnFixar} onPress={() => alternarFixarMeta(meta.id)}><Text style={styles.textoAcao}>{meta.fixado ? 'Desfixar' : '📌 Fixar'}</Text></TouchableOpacity></View>);
-
           return (
             <View key={meta.id} style={styles.metaCardWrapper}>
               <Swipeable renderRightActions={renderRightMeta} renderLeftActions={renderLeftMeta} containerStyle={styles.swipeable}>
                 <View style={[styles.metaCard, meta.fixado && styles.cardFixado]}>
-                  
                   <View style={styles.metaCardHeader}>
-                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                      {meta.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}
-                      <View style={{width: 14, height: 14, borderRadius: 7, backgroundColor: meta.cor, marginRight: 8}} />
-                      <Text style={styles.metaCardTitle}>{meta.titulo}</Text>
-                    </View>
+                    <View style={{flexDirection: 'row', alignItems: 'center'}}>{meta.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}<View style={{width: 14, height: 14, borderRadius: 7, backgroundColor: meta.cor, marginRight: 8}} /><Text style={styles.metaCardTitle}>{meta.titulo}</Text></View>
                     <Text style={[styles.metaCardPercent, {color: meta.cor}]}>{porcentagem.toFixed(0)}%</Text>
                   </View>
-                  
                   <View style={styles.metaTagsRow}>
                     <Text style={styles.metaTag}>{meta.categoria || 'Sem categoria'}</Text>
                     {meta.dataAlvo && <Text style={styles.metaTagCalendario}>📅 {meta.dataAlvo}</Text>}
@@ -656,19 +540,12 @@ export default function App() {
                     <Text style={styles.metaTag}>{meta.modalidade === 'parcelada' ? `Parcelado (${meta.qtdParcelas}x)` : 'À Vista'}</Text>
                     <Text style={styles.metaTag}>{meta.meioPagamento || 'Não definido'}</Text>
                   </View>
-
                   <View style={styles.metaValores}>
                     <Text style={styles.metaValorAtual}>R$ {(meta.valorAtual || 0).toFixed(2)}</Text>
                     <Text style={styles.metaValorAlvo}>de R$ {(meta.valorAlvo || 0).toFixed(2)}</Text>
                   </View>
-                  <View style={styles.metaBarraFundo}>
-                    <View style={[styles.metaBarraProgresso, { width: `${porcentagem}%`, backgroundColor: meta.cor }]} />
-                  </View>
-                  <View style={styles.metaAcoes}>
-                    <TouchableOpacity style={styles.btnDepositarMeta} onPress={() => abrirDepositarMeta(meta)}>
-                      <Text style={styles.btnDepositarMetaTexto}>Guardar Dinheiro</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <View style={styles.metaBarraFundo}><View style={[styles.metaBarraProgresso, { width: `${porcentagem}%`, backgroundColor: meta.cor }]} /></View>
+                  <View style={styles.metaAcoes}><TouchableOpacity style={styles.btnDepositarMeta} onPress={() => abrirDepositarMeta(meta)}><Text style={styles.btnDepositarMetaTexto}>Guardar Dinheiro</Text></TouchableOpacity></View>
                 </View>
               </Swipeable>
             </View>
@@ -682,13 +559,10 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container}>
-        
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => setMenuAberto(true)} style={styles.topBarIcon}><Feather name="menu" size={28} color="#1E293B" /></TouchableOpacity>
+          <TouchableOpacity onPress={() => setMenuAberto(true)} style={styles.topBarIcon}><Feather name="menu" size={28} color={iconColor} /></TouchableOpacity>
           <Text style={styles.topBarTitle}>{getTopBarTitle()}</Text>
-          <TouchableOpacity onPress={lerNotificacao} style={styles.topBarIcon}>
-            <View><Feather name="bell" size={24} color="#1E293B" />{temNotificacao && <View style={styles.notificationBadge} />}</View>
-          </TouchableOpacity>
+          <TouchableOpacity onPress={lerNotificacao} style={styles.topBarIcon}><View><Feather name="bell" size={24} color={iconColor} />{temNotificacao && <View style={styles.notificationBadge} />}</View></TouchableOpacity>
         </View>
 
         {abaAtual === 'dashboard' && renderDashboard()}
@@ -698,302 +572,168 @@ export default function App() {
         {abaAtual === 'metas' && renderMetas()}
 
         <View style={styles.bottomNav}>
-          <TouchableOpacity style={styles.navItem} onPress={() => setAbaAtual('dashboard')}><Feather name="home" size={24} color={abaAtual === 'dashboard' ? '#3B82F6' : '#94A3B8'} /><Text style={[styles.navText, abaAtual === 'dashboard' && styles.navTextAtivo]}>Início</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => setAbaAtual('extrato')}><Feather name="list" size={24} color={abaAtual === 'extrato' ? '#3B82F6' : '#94A3B8'} /><Text style={[styles.navText, abaAtual === 'extrato' && styles.navTextAtivo]}>Extrato</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setAbaAtual('dashboard')}><Feather name="home" size={24} color={abaAtual === 'dashboard' ? '#3B82F6' : (isDarkMode ? '#64748B' : '#94A3B8')} /><Text style={[styles.navText, abaAtual === 'dashboard' && styles.navTextAtivo]}>Início</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setAbaAtual('extrato')}><Feather name="list" size={24} color={abaAtual === 'extrato' ? '#3B82F6' : (isDarkMode ? '#64748B' : '#94A3B8')} /><Text style={[styles.navText, abaAtual === 'extrato' && styles.navTextAtivo]}>Extrato</Text></TouchableOpacity>
           <View style={styles.fabWrapper}><TouchableOpacity style={styles.fabBtn} onPress={() => setMenuAdicionarVisivel(true)}><Feather name="plus" size={32} color="#FFF" /></TouchableOpacity></View>
-          <TouchableOpacity style={styles.navItem} onPress={() => setAbaAtual('metas')}><Feather name="target" size={24} color={abaAtual === 'metas' ? '#3B82F6' : '#94A3B8'} /><Text style={[styles.navText, abaAtual === 'metas' && styles.navTextAtivo]}>Metas</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => setAbaAtual('perfil')}><Feather name="user" size={24} color={abaAtual === 'perfil' ? '#3B82F6' : '#94A3B8'} /><Text style={[styles.navText, abaAtual === 'perfil' && styles.navTextAtivo]}>Perfil</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setAbaAtual('metas')}><Feather name="target" size={24} color={abaAtual === 'metas' ? '#3B82F6' : (isDarkMode ? '#64748B' : '#94A3B8')} /><Text style={[styles.navText, abaAtual === 'metas' && styles.navTextAtivo]}>Metas</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setAbaAtual('perfil')}><Feather name="user" size={24} color={abaAtual === 'perfil' ? '#3B82F6' : (isDarkMode ? '#64748B' : '#94A3B8')} /><Text style={[styles.navText, abaAtual === 'perfil' && styles.navTextAtivo]}>Perfil</Text></TouchableOpacity>
         </View>
 
-        <Modal animationType="slide" transparent={true} visible={modalNovaMetaVisivel} onRequestClose={fecharModalMeta}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}>
-            <View style={styles.modalConteudo}>
-              <View style={styles.modalCabecalho}>
-                <Text style={styles.modalTitulo}>{idEditandoMeta ? 'Editar Meta' : 'Planejar Compra'}</Text>
-                <TouchableOpacity onPress={fecharModalMeta}><Text style={styles.modalFechar}>X</Text></TouchableOpacity>
-              </View>
-              
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <Text style={styles.label}>O que você quer alcançar/comprar?</Text>
-                <TextInput style={styles.input} placeholder="Ex: Tênis de Corrida, Viagem..." value={novaMetaTitulo} onChangeText={setNovaMetaTitulo} />
-                
-                <Text style={styles.label}>Categoria do Objetivo</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>
-                  {categorias.map((cat) => (
-                    <TouchableOpacity key={cat.id} style={[styles.pillCategoria, novaMetaCategoria === cat.nome && styles.pillCategoriaAtiva]} onPress={() => setNovaMetaCategoria(cat.nome)}>
-                      <View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: cat.cor, marginRight: 6}} /><Text style={[styles.textoPill, novaMetaCategoria === cat.nome && styles.textoBranco]}>{cat.nome}</Text></View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                <View style={styles.linhaDupla}>
-                  <View style={{width: '48%'}}>
-                     <Text style={styles.label}>Como pretende pagar?</Text>
-                     <View style={styles.linhaBotoesOpcao}>
-                       <TouchableOpacity style={[styles.opcaoBtn, novaMetaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaMetaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaMetaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity>
-                       <TouchableOpacity style={[styles.opcaoBtn, novaMetaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaMetaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaMetaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity>
-                     </View>
-                  </View>
-                  <View style={{width: '48%'}}>
-                     <Text style={styles.label}>Data Planejada 📅</Text>
-                     <TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('meta_alvo')}>
-                       <Text style={styles.inputDataTexto}>{novaMetaDataAlvo || 'Selecione'}</Text>
-                     </TouchableOpacity>
-                  </View>
-                </View>
-
-                {novaMetaModalidade === 'parcelada' && (
-                  <View style={{marginTop: 10}}>
-                     <Text style={styles.label}>Em quantas vezes?</Text>
-                     <TextInput style={styles.input} placeholder="Ex: 12" keyboardType="numeric" value={novaMetaQtdParcelas} onChangeText={setNovaMetaQtdParcelas} />
-                  </View>
-                )}
-
-                <Text style={styles.label}>Origem do Dinheiro (De onde vai sair?)</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>
-                  {contasOrigem.map((conta) => (
-                    <TouchableOpacity key={conta} style={[styles.pillCategoria, novaMetaOrigemConta === conta && {backgroundColor: '#1E293B'}]} onPress={() => setNovaMetaOrigemConta(conta)}>
-                       <Text style={[styles.textoPill, novaMetaOrigemConta === conta && styles.textoBranco]}>{conta}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                <Text style={styles.label}>Meio de Pagamento</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>
-                  {meiosPagamento.map((meio) => (
-                    <TouchableOpacity key={meio} style={[styles.pillCategoria, novaMetaMeioPagamento === meio && styles.pillCategoriaAtiva]} onPress={() => setNovaMetaMeioPagamento(meio)}>
-                       <Text style={[styles.textoPill, novaMetaMeioPagamento === meio && styles.textoBranco]}>{meio}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                <View style={styles.linhaDupla}>
-                  <View style={idEditandoMeta ? {width: '48%'} : {width: '100%'}}>
-                    <Text style={styles.label}>Valor Alvo Total (R$)</Text>
-                    <TextInput style={styles.input} placeholder="0.00" keyboardType="numeric" value={novaMetaAlvo} onChangeText={setNovaMetaAlvo} />
-                  </View>
-                  
-                  {idEditandoMeta && (
-                    <View style={{width: '48%'}}>
-                      <Text style={styles.label}>Valor Atual Guardado (R$)</Text>
-                      <TextInput style={styles.input} placeholder="0.00" keyboardType="numeric" value={novaMetaValorAtual} onChangeText={setNovaMetaValorAtual} />
-                    </View>
-                  )}
-                </View>
-                
-                <TouchableOpacity style={styles.botaoSalvar} onPress={salvarMeta}>
-                  <Text style={styles.textoBotaoSalvar}>{idEditandoMeta ? 'Atualizar Meta' : 'Criar Meta'}</Text>
-                </TouchableOpacity>
-                <View style={{height: 40}} /> 
-              </ScrollView>
-            </View>
-            
-            {calendarioVisivel && (
-              <View style={styles.calendarioOverlay}>
-                <View style={styles.calendarioBox}>
-                  <View style={styles.calTopo}>
-                    <TouchableOpacity onPress={() => setCalMes(calMes === 1 ? 12 : calMes - 1)}><Text style={styles.calSeta}>{'<'}</Text></TouchableOpacity>
-                    <Text style={styles.calTitulo}>{nomesMeses[calMes.toString().padStart(2, '0')]} {calAno}</Text>
-                    <TouchableOpacity onPress={() => setCalMes(calMes === 12 ? 1 : calMes + 1)}><Text style={styles.calSeta}>{'>'}</Text></TouchableOpacity>
-                  </View>
-                  <View style={styles.gridDias}>{arrayDias.map((dia) => (<TouchableOpacity key={dia} style={styles.diaItem} onPress={() => selecionarDia(dia)}><Text style={styles.diaTexto}>{dia}</Text></TouchableOpacity>))}</View>
-                  <TouchableOpacity style={styles.btnFecharCal} onPress={() => setCalendarioVisivel(false)}><Text style={styles.textoFecharCal}>Cancelar</Text></TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </KeyboardAvoidingView>
-        </Modal>
-
-        <Modal animationType="slide" transparent={true} visible={modalDepositarVisivel} onRequestClose={() => {setModalDepositarVisivel(false); setValorDeposito('');}}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}>
-            <View style={styles.modalConteudo}>
-              <View style={styles.modalCabecalho}>
-                <Text style={styles.modalTitulo}>Guardar Dinheiro</Text>
-                <TouchableOpacity onPress={() => {setModalDepositarVisivel(false); setValorDeposito('');}}><Text style={styles.modalFechar}>X</Text></TouchableOpacity>
-              </View>
-              <Text style={styles.labelPequeno}>Destino: {metaSelecionada?.titulo}</Text>
-              <Text style={styles.label}>Qual valor você quer depositar?</Text>
-              <TextInput style={[styles.input, {marginBottom: 15}]} placeholder="0.00" keyboardType="numeric" value={valorDeposito} onChangeText={setValorDeposito} />
-              
-              <Text style={styles.labelPequeno}>De onde vem o dinheiro?</Text>
-              <View style={[styles.linhaBotoesOpcao, {marginBottom: 10}]}>
-                <TouchableOpacity style={[styles.opcaoBtn, origemDeposito === 'carteira' && styles.opcaoBtnAtivo]} onPress={() => setOrigemDeposito('carteira')}>
-                  <Text style={[styles.textoOpcao, origemDeposito === 'carteira' && styles.textoBranco]}>Da Minha Carteira</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.opcaoBtn, origemDeposito === 'externo' && styles.opcaoBtnAtivo]} onPress={() => setOrigemDeposito('externo')}>
-                  <Text style={[styles.textoOpcao, origemDeposito === 'externo' && styles.textoBranco]}>Dinheiro Externo</Text>
-                </TouchableOpacity>
-              </View>
-              
-              {origemDeposito === 'carteira' && (
-                <Text style={styles.calculoParcelaTexto}>💡 Isso vai gerar uma Despesa automática na conta base ({metaSelecionada?.origemConta || 'Conta Corrente'}) no seu Extrato de hoje.</Text>
-              )}
-
-              <TouchableOpacity style={[styles.botaoSalvar, {marginTop: 15}]} onPress={depositarNaMeta}>
-                <Text style={styles.textoBotaoSalvar}>Confirmar Depósito</Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-
-        <Modal animationType="slide" transparent={true} visible={modalVisivel} onRequestClose={fecharModal}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>{idEditando ? 'Editar' : 'Novo Registro'}</Text><TouchableOpacity onPress={fecharModal}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false}>{novoTipo === 'saida' && ( <View style={{ marginTop: 5, marginBottom: 15 }}><Text style={styles.labelPequeno}>Forma de Pagamento:</Text><View style={styles.linhaBotoesOpcao}><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'fixa' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('fixa')}><Text style={[styles.textoOpcao, novaModalidade === 'fixa' && styles.textoBranco]}>Fixa Mensal</Text></TouchableOpacity></View></View>)}<Text style={styles.label}>O que foi?</Text><TextInput style={styles.input} placeholder={novoTipo === 'entrada' ? "Ex: Salário, Venda..." : "Ex: Mercado, Uber..."} value={novaDescricao} onChangeText={setNovaDescricao} /><Text style={styles.label}>Categoria</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>{categorias.map((cat) => (<TouchableOpacity key={cat.id} style={[styles.pillCategoria, novaCategoriaForm === cat.nome && styles.pillCategoriaAtiva]} onPress={() => setNovaCategoriaForm(cat.nome)}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: cat.cor, marginRight: 6}} /><Text style={[styles.textoPill, novaCategoriaForm === cat.nome && styles.textoBranco]}>{cat.nome}</Text></View></TouchableOpacity>))}</ScrollView><View style={styles.linhaDupla}><View style={novaModalidade === 'parcelada' && novoTipo === 'saida' ? { width: '58%' } : { width: '100%' }}><Text style={styles.label}>{novaModalidade === 'parcelada' && novoTipo === 'saida' ? 'Valor Total (R$)' : 'Valor (R$)'}</Text><TextInput style={styles.input} placeholder="0.00" keyboardType="numeric" value={novoValor} onChangeText={setNovoValor} /></View>{novaModalidade === 'parcelada' && novoTipo === 'saida' && (<View style={{ width: '38%' }}><Text style={styles.label}>Parcelas</Text><TextInput style={styles.input} placeholder="Ex: 3" keyboardType="numeric" value={qtdParcelas} onChangeText={setQtdParcelas} /></View>)}</View>{novaModalidade === 'parcelada' && novoTipo === 'saida' && novoValor !== '' && (<Text style={styles.calculoParcelaTexto}>💡 {qtdParcelas || 2}x de R$ {(parseFloat(novoValor.replace(',', '.') || 0) / (parseInt(qtdParcelas, 10) || 2)).toFixed(2)} por mês</Text>)}{novoTipo === 'saida' ? (novaModalidade === 'fixa' ? (<View style={styles.avisoFixaContainer}><Text style={styles.avisoFixaTexto}>💡 A despesa começará automaticamente em {nomesMeses[mesSelecionado.split('/')[0]]}/{mesSelecionado.split('/')[1]}</Text></View>) : (<View style={styles.linhaDupla}><View style={styles.metadeInput}><Text style={styles.label}>Data da Compra</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('compra')}><Text style={styles.inputDataTexto}>{novaDataCompra || 'Selecionar 📅'}</Text></TouchableOpacity></View><View style={styles.metadeInput}><Text style={styles.label}>Vencimento</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('vencimento')}><Text style={styles.inputDataTexto}>{novaDataVencimento || 'Selecionar 📅'}</Text></TouchableOpacity></View></View>)) : (<View style={{ width: '100%' }}><Text style={styles.label}>Data do Crédito</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('compra')}><Text style={styles.inputDataTexto}>{novaDataCompra || 'Selecionar 📅'}</Text></TouchableOpacity></View>)}<TouchableOpacity style={styles.botaoSalvar} onPress={salvarTransacao}><Text style={styles.textoBotaoSalvar}>{idEditando ? 'Atualizar Registro' : 'Salvar Transação'}</Text></TouchableOpacity></ScrollView></View>{calendarioVisivel && (<View style={styles.calendarioOverlay}><View style={styles.calendarioBox}><View style={styles.calTopo}><TouchableOpacity onPress={() => setCalMes(calMes === 1 ? 12 : calMes - 1)}><Text style={styles.calSeta}>{'<'}</Text></TouchableOpacity><Text style={styles.calTitulo}>{nomesMeses[calMes.toString().padStart(2, '0')]} {calAno}</Text><TouchableOpacity onPress={() => setCalMes(calMes === 12 ? 1 : calMes + 1)}><Text style={styles.calSeta}>{'>'}</Text></TouchableOpacity></View><View style={styles.gridDias}>{arrayDias.map((dia) => (<TouchableOpacity key={dia} style={styles.diaItem} onPress={() => selecionarDia(dia)}><Text style={styles.diaTexto}>{dia}</Text></TouchableOpacity>))}</View><TouchableOpacity style={styles.btnFecharCal} onPress={() => setCalendarioVisivel(false)}><Text style={styles.textoFecharCal}>Cancelar</Text></TouchableOpacity></View></View>)}</KeyboardAvoidingView></Modal>
-        <Modal visible={menuAdicionarVisivel} transparent={true} animationType="slide" onRequestClose={() => setMenuAdicionarVisivel(false)}><TouchableOpacity style={styles.modalAdicionarOverlay} activeOpacity={1} onPress={() => setMenuAdicionarVisivel(false)}><View style={styles.menuAdicionarContent}><View style={styles.menuAdicionarHeader}><Text style={styles.menuAdicionarTitle}>O que deseja registrar?</Text></View><View style={styles.menuAdicionarBotoes}><TouchableOpacity style={styles.menuAdicionarOpcao} onPress={() => escolherTipoTransacao('saida')}><View style={[styles.iconBoxAdicionar, { backgroundColor: '#FEF2F2' }]}><Feather name="arrow-down" size={28} color="#B91C1C" /></View><Text style={styles.menuAdicionarTexto}>Despesa</Text></TouchableOpacity><TouchableOpacity style={styles.menuAdicionarOpcao} onPress={() => escolherTipoTransacao('entrada')}><View style={[styles.iconBoxAdicionar, { backgroundColor: '#F0FDF4' }]}><Feather name="arrow-up" size={28} color="#15803D" /></View><Text style={styles.menuAdicionarTexto}>Receita</Text></TouchableOpacity></View></View></TouchableOpacity></Modal>
+        <Modal animationType="slide" transparent={true} visible={modalNovaMetaVisivel} onRequestClose={fecharModalMeta}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>{idEditandoMeta ? 'Editar Meta' : 'Planejar Compra'}</Text><TouchableOpacity onPress={fecharModalMeta}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false}><Text style={styles.label}>O que você quer alcançar/comprar?</Text><TextInput style={styles.input} placeholder="Ex: Tênis de Corrida, Viagem..." placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaMetaTitulo} onChangeText={setNovaMetaTitulo} /><Text style={styles.label}>Categoria do Objetivo</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>{categorias.map((cat) => (<TouchableOpacity key={cat.id} style={[styles.pillCategoria, novaMetaCategoria === cat.nome && styles.pillCategoriaAtiva]} onPress={() => setNovaMetaCategoria(cat.nome)}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: cat.cor, marginRight: 6}} /><Text style={[styles.textoPill, novaMetaCategoria === cat.nome && styles.textoBranco]}>{cat.nome}</Text></View></TouchableOpacity>))}</ScrollView><View style={styles.linhaDupla}><View style={{width: '48%'}}><Text style={styles.label}>Como pretende pagar?</Text><View style={styles.linhaBotoesOpcao}><TouchableOpacity style={[styles.opcaoBtn, novaMetaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaMetaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaMetaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaMetaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaMetaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaMetaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity></View></View><View style={{width: '48%'}}><Text style={styles.label}>Data Planejada 📅</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('meta_alvo')}><Text style={styles.inputDataTexto}>{novaMetaDataAlvo || 'Selecione'}</Text></TouchableOpacity></View></View>{novaMetaModalidade === 'parcelada' && (<View style={{marginTop: 10}}><Text style={styles.label}>Em quantas vezes?</Text><TextInput style={styles.input} placeholder="Ex: 12" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novaMetaQtdParcelas} onChangeText={setNovaMetaQtdParcelas} /></View>)}<Text style={styles.label}>Origem do Dinheiro (De onde vai sair?)</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>{contasOrigem.map((conta) => (<TouchableOpacity key={conta} style={[styles.pillCategoria, novaMetaOrigemConta === conta && {backgroundColor: '#3B82F6'}]} onPress={() => setNovaMetaOrigemConta(conta)}><Text style={[styles.textoPill, novaMetaOrigemConta === conta && styles.textoBranco]}>{conta}</Text></TouchableOpacity>))}</ScrollView><Text style={styles.label}>Meio de Pagamento</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>{meiosPagamento.map((meio) => (<TouchableOpacity key={meio} style={[styles.pillCategoria, novaMetaMeioPagamento === meio && styles.pillCategoriaAtiva]} onPress={() => setNovaMetaMeioPagamento(meio)}><Text style={[styles.textoPill, novaMetaMeioPagamento === meio && styles.textoBranco]}>{meio}</Text></TouchableOpacity>))}</ScrollView><View style={styles.linhaDupla}><View style={idEditandoMeta ? {width: '48%'} : {width: '100%'}}><Text style={styles.label}>Valor Alvo Total (R$)</Text><TextInput style={styles.input} placeholder="0.00" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novaMetaAlvo} onChangeText={setNovaMetaAlvo} /></View>{idEditandoMeta && (<View style={{width: '48%'}}><Text style={styles.label}>Valor Atual Guardado (R$)</Text><TextInput style={styles.input} placeholder="0.00" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novaMetaValorAtual} onChangeText={setNovaMetaValorAtual} /></View>)}</View><TouchableOpacity style={styles.botaoSalvar} onPress={salvarMeta}><Text style={styles.textoBotaoSalvar}>{idEditandoMeta ? 'Atualizar Meta' : 'Criar Meta'}</Text></TouchableOpacity><View style={{height: 40}} /></ScrollView></View>{calendarioVisivel && (<View style={styles.calendarioOverlay}><View style={styles.calendarioBox}><View style={styles.calTopo}><TouchableOpacity onPress={() => setCalMes(calMes === 1 ? 12 : calMes - 1)}><Text style={styles.calSeta}>{'<'}</Text></TouchableOpacity><Text style={styles.calTitulo}>{nomesMeses[calMes.toString().padStart(2, '0')]} {calAno}</Text><TouchableOpacity onPress={() => setCalMes(calMes === 12 ? 1 : calMes + 1)}><Text style={styles.calSeta}>{'>'}</Text></TouchableOpacity></View><View style={styles.gridDias}>{arrayDias.map((dia) => (<TouchableOpacity key={dia} style={styles.diaItem} onPress={() => selecionarDia(dia)}><Text style={styles.diaTexto}>{dia}</Text></TouchableOpacity>))}</View><TouchableOpacity style={styles.btnFecharCal} onPress={() => setCalendarioVisivel(false)}><Text style={styles.textoFecharCal}>Cancelar</Text></TouchableOpacity></View></View>)}</KeyboardAvoidingView></Modal>
+        <Modal animationType="slide" transparent={true} visible={modalDepositarVisivel} onRequestClose={() => {setModalDepositarVisivel(false); setValorDeposito('');}}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Guardar Dinheiro</Text><TouchableOpacity onPress={() => {setModalDepositarVisivel(false); setValorDeposito('');}}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><Text style={styles.labelPequeno}>Destino: {metaSelecionada?.titulo}</Text><Text style={styles.label}>Qual valor você quer depositar?</Text><TextInput style={[styles.input, {marginBottom: 15}]} placeholder="0.00" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={valorDeposito} onChangeText={setValorDeposito} /><Text style={styles.labelPequeno}>De onde vem o dinheiro?</Text><View style={[styles.linhaBotoesOpcao, {marginBottom: 10}]}><TouchableOpacity style={[styles.opcaoBtn, origemDeposito === 'carteira' && styles.opcaoBtnAtivo]} onPress={() => setOrigemDeposito('carteira')}><Text style={[styles.textoOpcao, origemDeposito === 'carteira' && styles.textoBranco]}>Da Minha Carteira</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, origemDeposito === 'externo' && styles.opcaoBtnAtivo]} onPress={() => setOrigemDeposito('externo')}><Text style={[styles.textoOpcao, origemDeposito === 'externo' && styles.textoBranco]}>Dinheiro Externo</Text></TouchableOpacity></View>{origemDeposito === 'carteira' && (<Text style={styles.calculoParcelaTexto}>💡 Isso vai gerar uma Despesa automática na conta base ({metaSelecionada?.origemConta || 'Conta Corrente'}) no seu Extrato de hoje.</Text>)}<TouchableOpacity style={[styles.botaoSalvar, {marginTop: 15}]} onPress={depositarNaMeta}><Text style={styles.textoBotaoSalvar}>Confirmar Depósito</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
+        <Modal animationType="slide" transparent={true} visible={modalVisivel} onRequestClose={fecharModal}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>{idEditando ? 'Editar' : 'Novo Registro'}</Text><TouchableOpacity onPress={fecharModal}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false}>{novoTipo === 'saida' && ( <View style={{ marginTop: 5, marginBottom: 15 }}><Text style={styles.labelPequeno}>Forma de Pagamento:</Text><View style={styles.linhaBotoesOpcao}><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'fixa' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('fixa')}><Text style={[styles.textoOpcao, novaModalidade === 'fixa' && styles.textoBranco]}>Fixa Mensal</Text></TouchableOpacity></View></View>)}<Text style={styles.label}>O que foi?</Text><TextInput style={styles.input} placeholder={novoTipo === 'entrada' ? "Ex: Salário, Venda..." : "Ex: Mercado, Uber..."} placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaDescricao} onChangeText={setNovaDescricao} /><Text style={styles.label}>Categoria</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>{categorias.map((cat) => (<TouchableOpacity key={cat.id} style={[styles.pillCategoria, novaCategoriaForm === cat.nome && styles.pillCategoriaAtiva]} onPress={() => setNovaCategoriaForm(cat.nome)}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: cat.cor, marginRight: 6}} /><Text style={[styles.textoPill, novaCategoriaForm === cat.nome && styles.textoBranco]}>{cat.nome}</Text></View></TouchableOpacity>))}</ScrollView><View style={styles.linhaDupla}><View style={novaModalidade === 'parcelada' && novoTipo === 'saida' ? { width: '58%' } : { width: '100%' }}><Text style={styles.label}>{novaModalidade === 'parcelada' && novoTipo === 'saida' ? 'Valor Total (R$)' : 'Valor (R$)'}</Text><TextInput style={styles.input} placeholder="0.00" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novoValor} onChangeText={setNovoValor} /></View>{novaModalidade === 'parcelada' && novoTipo === 'saida' && (<View style={{ width: '38%' }}><Text style={styles.label}>Parcelas</Text><TextInput style={styles.input} placeholder="Ex: 3" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={qtdParcelas} onChangeText={setQtdParcelas} /></View>)}</View>{novaModalidade === 'parcelada' && novoTipo === 'saida' && novoValor !== '' && (<Text style={styles.calculoParcelaTexto}>💡 {qtdParcelas || 2}x de R$ {(parseFloat(novoValor.replace(',', '.') || 0) / (parseInt(qtdParcelas, 10) || 2)).toFixed(2)} por mês</Text>)}{novoTipo === 'saida' ? (novaModalidade === 'fixa' ? (<View style={styles.avisoFixaContainer}><Text style={styles.avisoFixaTexto}>💡 A despesa começará automaticamente em {nomesMeses[mesSelecionado.split('/')[0]]}/{mesSelecionado.split('/')[1]}</Text></View>) : (<View style={styles.linhaDupla}><View style={styles.metadeInput}><Text style={styles.label}>Data da Compra</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('compra')}><Text style={styles.inputDataTexto}>{novaDataCompra || 'Selecionar 📅'}</Text></TouchableOpacity></View><View style={styles.metadeInput}><Text style={styles.label}>Vencimento</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('vencimento')}><Text style={styles.inputDataTexto}>{novaDataVencimento || 'Selecionar 📅'}</Text></TouchableOpacity></View></View>)) : (<View style={{ width: '100%' }}><Text style={styles.label}>Data do Crédito</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('compra')}><Text style={styles.inputDataTexto}>{novaDataCompra || 'Selecionar 📅'}</Text></TouchableOpacity></View>)}<TouchableOpacity style={styles.botaoSalvar} onPress={salvarTransacao}><Text style={styles.textoBotaoSalvar}>{idEditando ? 'Atualizar Registro' : 'Salvar Transação'}</Text></TouchableOpacity></ScrollView></View>{calendarioVisivel && (<View style={styles.calendarioOverlay}><View style={styles.calendarioBox}><View style={styles.calTopo}><TouchableOpacity onPress={() => setCalMes(calMes === 1 ? 12 : calMes - 1)}><Text style={styles.calSeta}>{'<'}</Text></TouchableOpacity><Text style={styles.calTitulo}>{nomesMeses[calMes.toString().padStart(2, '0')]} {calAno}</Text><TouchableOpacity onPress={() => setCalMes(calMes === 12 ? 1 : calMes + 1)}><Text style={styles.calSeta}>{'>'}</Text></TouchableOpacity></View><View style={styles.gridDias}>{arrayDias.map((dia) => (<TouchableOpacity key={dia} style={styles.diaItem} onPress={() => selecionarDia(dia)}><Text style={styles.diaTexto}>{dia}</Text></TouchableOpacity>))}</View><TouchableOpacity style={styles.btnFecharCal} onPress={() => setCalendarioVisivel(false)}><Text style={styles.textoFecharCal}>Cancelar</Text></TouchableOpacity></View></View>)}</KeyboardAvoidingView></Modal>
+        <Modal visible={menuAdicionarVisivel} transparent={true} animationType="slide" onRequestClose={() => setMenuAdicionarVisivel(false)}><TouchableOpacity style={styles.modalAdicionarOverlay} activeOpacity={1} onPress={() => setMenuAdicionarVisivel(false)}><View style={styles.menuAdicionarContent}><View style={styles.menuAdicionarHeader}><Text style={styles.menuAdicionarTitle}>O que deseja registrar?</Text></View><View style={styles.menuAdicionarBotoes}><TouchableOpacity style={styles.menuAdicionarOpcao} onPress={() => escolherTipoTransacao('saida')}><View style={[styles.iconBoxAdicionar, { backgroundColor: isDarkMode ? '#7F1D1D' : '#FEF2F2' }]}><Feather name="arrow-down" size={28} color={isDarkMode ? '#F87171' : '#B91C1C'} /></View><Text style={styles.menuAdicionarTexto}>Despesa</Text></TouchableOpacity><TouchableOpacity style={styles.menuAdicionarOpcao} onPress={() => escolherTipoTransacao('entrada')}><View style={[styles.iconBoxAdicionar, { backgroundColor: isDarkMode ? '#064E3B' : '#F0FDF4' }]}><Feather name="arrow-up" size={28} color={isDarkMode ? '#34D399' : '#15803D'} /></View><Text style={styles.menuAdicionarTexto}>Receita</Text></TouchableOpacity></View></View></TouchableOpacity></Modal>
         <Modal animationType="fade" transparent={true} visible={modalMesVisivel} onRequestClose={() => setModalMesVisivel(false)}><View style={styles.modalFundoCentro}><View style={styles.calendarioBox}><View style={styles.calTopo}><TouchableOpacity onPress={() => setAnoTemp(anoTemp - 1)}><Text style={styles.calSeta}>{'<'}</Text></TouchableOpacity><Text style={styles.calTitulo}>{anoTemp}</Text><TouchableOpacity onPress={() => setAnoTemp(anoTemp + 1)}><Text style={styles.calSeta}>{'>'}</Text></TouchableOpacity></View><View style={styles.gridMeses}>{mesesAbreviados.map((mes) => { const isSelecionado = mesSelecionado === `${mes.num.toString().padStart(2, '0')}/${anoTemp}`; return (<TouchableOpacity key={mes.num} style={[styles.mesItem, isSelecionado && styles.mesItemAtivo]} onPress={() => escolherMes(mes.num)}><Text style={[styles.mesItemTexto, isSelecionado && styles.mesItemTextoAtivo]}>{mes.nome}</Text></TouchableOpacity>);})}</View><TouchableOpacity style={styles.btnFecharCal} onPress={() => setModalMesVisivel(false)}><Text style={styles.textoFecharCal}>Cancelar</Text></TouchableOpacity></View></View></Modal>
-        <Modal animationType="slide" transparent={true} visible={modalEditarPerfilVisivel} onRequestClose={() => setModalEditarPerfilVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Editar Perfil</Text><TouchableOpacity onPress={() => setModalEditarPerfilVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><Text style={styles.label}>Nome ou Apelido</Text><TextInput style={styles.input} placeholder="Seu nome" value={perfilNome} onChangeText={setPerfilNome} /><Text style={styles.label}>E-mail</Text><TextInput style={styles.input} placeholder="Seu e-mail" keyboardType="email-address" autoCapitalize="none" value={perfilEmail} onChangeText={setPerfilEmail} /><TouchableOpacity style={styles.botaoSalvar} onPress={salvarEdicaoPerfil}><Text style={styles.textoBotaoSalvar}>Salvar Alterações</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
-        <Modal animationType="slide" transparent={true} visible={modalSegurancaVisivel} onRequestClose={() => setModalSegurancaVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Segurança</Text><TouchableOpacity onPress={() => setModalSegurancaVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><View style={styles.biometriaRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><Feather name="smartphone" size={24} color="#1E293B" style={{marginRight: 10}} /><Text style={styles.labelBiometria}>Biometria / Face ID</Text></View><Switch trackColor={{ false: "#CBD5E1", true: "#10B981" }} thumbColor="#FFFFFF" ios_backgroundColor="#CBD5E1" onValueChange={() => setBiometriaAtiva(!biometriaAtiva)} value={biometriaAtiva} /></View><Text style={styles.dicaBiometria}>Use sua digital ou rosto para entrar no app sem precisar digitar a senha toda vez.</Text><Text style={[styles.sectionTitle, {marginTop: 20}]}>Trocar Senha</Text><Text style={styles.labelPequeno}>Senha Atual</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" secureTextEntry={true} /><Text style={styles.labelPequeno}>Nova Senha</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" secureTextEntry={true} /><TouchableOpacity style={styles.botaoSalvar} onPress={() => { Platform.OS === 'web' ? window.alert('Senha atualizada com segurança!') : Alert.alert('Segurança', 'Senha atualizada com segurança!'); setModalSegurancaVisivel(false); }}><Text style={styles.textoBotaoSalvar}>Atualizar Senha</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
-        <Modal animationType="slide" transparent={true} visible={modalCategoriasVisivel} onRequestClose={() => setModalCategoriasVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Gerenciar Categorias</Text><TouchableOpacity onPress={() => setModalCategoriasVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><Text style={styles.labelPequeno}>Nova Categoria:</Text><View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}><TextInput style={[styles.input, {flex: 1, marginRight: 10, paddingVertical: 10}]} placeholder="Ex: Faculdade" value={novaCategoriaNome} onChangeText={setNovaCategoriaNome} /><TouchableOpacity style={styles.btnAdicionarCategoria} onPress={adicionarCategoria}><Feather name="plus" size={20} color="#FFF" /></TouchableOpacity></View><Text style={styles.labelPequeno}>Escolha a Cor:</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>{coresDisponiveis.map(cor => (<TouchableOpacity key={cor} style={[styles.bolinhaCor, {backgroundColor: cor}, novaCategoriaCor === cor && styles.bolinhaCorAtiva]} onPress={() => setNovaCategoriaCor(cor)} />))}</ScrollView><Text style={styles.labelPequeno}>Suas Categorias:</Text><FlatList data={categorias} keyExtractor={item => item.id} style={{maxHeight: 300}} renderItem={({item}) => (<View style={styles.catEditRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 12, height: 12, borderRadius: 6, backgroundColor: item.cor, marginRight: 10}} /><Text style={styles.catEditNome}>{item.nome}</Text></View><TouchableOpacity onPress={() => excluirCategoria(item.id, item.nome)} style={{padding: 5}}><Feather name="trash-2" size={20} color="#EF4444" /></TouchableOpacity></View>)} /></View></KeyboardAvoidingView></Modal>
-        <Modal visible={menuAberto} transparent={true} animationType="fade" onRequestClose={() => setMenuAberto(false)}><View style={styles.drawerOverlay}><View style={styles.drawerContent}><View style={styles.drawerHeader}><View style={styles.avatarPlaceholder}><Feather name="user" size={32} color="#FFF" /></View><Text style={styles.drawerName}>App Finanças</Text><Text style={styles.drawerSubtitle}>Gestão Inteligente</Text></View><ScrollView><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setAbaAtual('visao_anual'), 200); }}><Feather name="bar-chart-2" size={22} color="#64748B" /><Text style={styles.drawerItemText}>Visão Anual</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setModalCategoriasVisivel(true), 200); }}><Feather name="tag" size={22} color="#64748B" /><Text style={styles.drawerItemText}>Gerenciar Categorias</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="download" size={22} color="#64748B" /><Text style={styles.drawerItemText}>Exportar Relatórios</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="settings" size={22} color="#64748B" /><Text style={styles.drawerItemText}>Configurações</Text></TouchableOpacity></ScrollView></View><TouchableOpacity style={styles.drawerCloseArea} activeOpacity={1} onPress={() => setMenuAberto(false)} /></View></Modal>
+        <Modal animationType="slide" transparent={true} visible={modalEditarPerfilVisivel} onRequestClose={() => setModalEditarPerfilVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Editar Perfil</Text><TouchableOpacity onPress={() => setModalEditarPerfilVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><Text style={styles.label}>Nome ou Apelido</Text><TextInput style={styles.input} placeholder="Seu nome" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={perfilNome} onChangeText={setPerfilNome} /><Text style={styles.label}>E-mail</Text><TextInput style={styles.input} placeholder="Seu e-mail" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="email-address" autoCapitalize="none" value={perfilEmail} onChangeText={setPerfilEmail} /><TouchableOpacity style={styles.botaoSalvar} onPress={salvarEdicaoPerfil}><Text style={styles.textoBotaoSalvar}>Salvar Alterações</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
+        <Modal animationType="slide" transparent={true} visible={modalSegurancaVisivel} onRequestClose={() => setModalSegurancaVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Segurança</Text><TouchableOpacity onPress={() => setModalSegurancaVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><View style={styles.biometriaRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><Feather name="smartphone" size={24} color={iconColor} style={{marginRight: 10}} /><Text style={styles.labelBiometria}>Biometria / Face ID</Text></View><Switch trackColor={{ false: "#CBD5E1", true: "#3B82F6" }} thumbColor="#FFFFFF" onValueChange={() => setBiometriaAtiva(!biometriaAtiva)} value={biometriaAtiva} /></View><Text style={styles.dicaBiometria}>Use sua digital ou rosto para entrar no app sem precisar digitar a senha toda vez.</Text><Text style={[styles.sectionTitle, {marginTop: 20}]}>Trocar Senha</Text><Text style={styles.labelPequeno}>Senha Atual</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} /><Text style={styles.labelPequeno}>Nova Senha</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} /><TouchableOpacity style={styles.botaoSalvar} onPress={() => { Platform.OS === 'web' ? window.alert('Senha atualizada com segurança!') : Alert.alert('Segurança', 'Senha atualizada com segurança!'); setModalSegurancaVisivel(false); }}><Text style={styles.textoBotaoSalvar}>Atualizar Senha</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
+        <Modal animationType="slide" transparent={true} visible={modalCategoriasVisivel} onRequestClose={() => setModalCategoriasVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Gerenciar Categorias</Text><TouchableOpacity onPress={() => setModalCategoriasVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><Text style={styles.labelPequeno}>Nova Categoria:</Text><View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}><TextInput style={[styles.input, {flex: 1, marginRight: 10, paddingVertical: 10}]} placeholder="Ex: Faculdade" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaCategoriaNome} onChangeText={setNovaCategoriaNome} /><TouchableOpacity style={styles.btnAdicionarCategoria} onPress={adicionarCategoria}><Feather name="plus" size={20} color="#FFF" /></TouchableOpacity></View><Text style={styles.labelPequeno}>Escolha a Cor:</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>{coresDisponiveis.map(cor => (<TouchableOpacity key={cor} style={[styles.bolinhaCor, {backgroundColor: cor}, novaCategoriaCor === cor && styles.bolinhaCorAtiva]} onPress={() => setNovaCategoriaCor(cor)} />))}</ScrollView><Text style={styles.labelPequeno}>Suas Categorias:</Text><FlatList data={categorias} keyExtractor={item => item.id} style={{maxHeight: 300}} renderItem={({item}) => (<View style={styles.catEditRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 12, height: 12, borderRadius: 6, backgroundColor: item.cor, marginRight: 10}} /><Text style={styles.catEditNome}>{item.nome}</Text></View><TouchableOpacity onPress={() => excluirCategoria(item.id, item.nome)} style={{padding: 5}}><Feather name="trash-2" size={20} color="#EF4444" /></TouchableOpacity></View>)} /></View></KeyboardAvoidingView></Modal>
+        <Modal visible={menuAberto} transparent={true} animationType="fade" onRequestClose={() => setMenuAberto(false)}><View style={styles.drawerOverlay}><View style={styles.drawerContent}><View style={styles.drawerHeader}><View style={styles.avatarPlaceholder}><Feather name="user" size={32} color="#FFF" /></View><Text style={styles.drawerName}>App Finanças</Text><Text style={styles.drawerSubtitle}>Gestão Inteligente</Text></View><ScrollView><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setAbaAtual('visao_anual'), 200); }}><Feather name="bar-chart-2" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Visão Anual</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setModalCategoriasVisivel(true), 200); }}><Feather name="tag" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Gerenciar Categorias</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="download" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Exportar Relatórios</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="settings" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Configurações</Text></TouchableOpacity></ScrollView></View><TouchableOpacity style={styles.drawerCloseArea} activeOpacity={1} onPress={() => setMenuAberto(false)} /></View></Modal>
 
       </SafeAreaView>
     </GestureHandlerRootView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollContent: { flex: 1, backgroundColor: '#FAFAFA' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 15, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  topBarTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+const dynamicStyles = (isDark) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FFFFFF' },
+  scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  topBarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   topBarIcon: { padding: 5 },
-  notificationBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#FFFFFF' },
+  notificationBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: isDark ? '#1E293B' : '#FFFFFF' },
   metaTagsRow: { flexDirection: 'row', marginBottom: 12, flexWrap: 'wrap' },
-  metaTag: { backgroundColor: '#F1F5F9', color: '#64748B', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
-  metaTagCalendario: { backgroundColor: '#FEF2F2', color: '#EF4444', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
-  metaTagPagamento: { backgroundColor: '#EFF6FF', color: '#3B82F6', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
+  metaTag: { backgroundColor: isDark ? '#334155' : '#F1F5F9', color: isDark ? '#CBD5E1' : '#64748B', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
+  metaTagCalendario: { backgroundColor: isDark ? '#7F1D1D' : '#FEF2F2', color: isDark ? '#FCA5A5' : '#EF4444', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
+  metaTagPagamento: { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', color: isDark ? '#93C5FD' : '#3B82F6', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
   metaCardWrapper: { marginBottom: 15, marginHorizontal: 20, borderRadius: 16, backgroundColor: 'transparent' },
-  metaCard: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  avisoFixaContainer: { marginTop: 10, marginBottom: 15, backgroundColor: '#EFF6FF', padding: 15, borderRadius: 12, alignItems: 'center' },
-  avisoFixaTexto: { color: '#3B82F6', fontSize: 13, fontWeight: '600' },
-  grupoContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, marginBottom: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, overflow: 'hidden' },
-  grupoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, backgroundColor: '#FFFFFF' },
-  grupoTitulo: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginLeft: 10 },
-  grupoQtd: { fontSize: 14, color: '#94A3B8', marginLeft: 6 },
+  metaCard: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  avisoFixaContainer: { marginTop: 10, marginBottom: 15, backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', padding: 15, borderRadius: 12, alignItems: 'center' },
+  avisoFixaTexto: { color: isDark ? '#93C5FD' : '#3B82F6', fontSize: 13, fontWeight: '600' },
+  grupoContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, marginBottom: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, overflow: 'hidden' },
+  grupoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
+  grupoTitulo: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B', marginLeft: 10 },
+  grupoQtd: { fontSize: 14, color: isDark ? '#64748B' : '#94A3B8', marginLeft: 6 },
   grupoTotal: { fontSize: 16, fontWeight: 'bold' },
-  grupoConteudo: { backgroundColor: '#FAFAFA', borderTopWidth: 1, borderTopColor: '#F1F5F9', padding: 10 },
+  grupoConteudo: { backgroundColor: isDark ? '#0F172A' : '#FAFAFA', borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', padding: 10 },
   cardContainerGrouped: { marginBottom: 8 },
-  listCardGrouped: { backgroundColor: '#FFFFFF', padding: 15, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2, elevation: 1 },
-  calendarioOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0, 0, 0, 0.65)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
-  metasHeader: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 16, marginHorizontal: 20, marginTop: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  metasHeaderLabel: { fontSize: 14, color: '#64748B', fontWeight: '600' },
+  listCardGrouped: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 15, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2, elevation: 1 },
+  calendarioOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
+  metasHeader: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, marginHorizontal: 20, marginTop: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  metasHeaderLabel: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '600' },
   metasHeaderValor: { fontSize: 32, fontWeight: 'bold', color: '#10B981', marginVertical: 5 },
   btnNovaMeta: { backgroundColor: '#3B82F6', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
   btnNovaMetaTexto: { color: '#FFF', fontWeight: 'bold', marginLeft: 8 },
   metaCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  metaCardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
+  metaCardTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   metaCardPercent: { fontSize: 16, fontWeight: 'bold' },
   metaValores: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   metaValorAtual: { fontSize: 14, color: '#10B981', fontWeight: 'bold' },
-  metaValorAlvo: { fontSize: 14, color: '#64748B' },
-  metaBarraFundo: { width: '100%', height: 10, backgroundColor: '#F1F5F9', borderRadius: 5, overflow: 'hidden', marginBottom: 15 },
+  metaValorAlvo: { fontSize: 14, color: isDark ? '#64748B' : '#64748B' },
+  metaBarraFundo: { width: '100%', height: 10, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 5, overflow: 'hidden', marginBottom: 15 },
   metaBarraProgresso: { height: '100%', borderRadius: 5 },
   metaAcoes: { flexDirection: 'row', justifyContent: 'flex-end' },
-  btnDepositarMeta: { backgroundColor: '#EFF6FF', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
-  btnDepositarMetaTexto: { color: '#3B82F6', fontWeight: 'bold', fontSize: 13 },
-  graficoAnualContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, marginHorizontal: 20, paddingVertical: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  btnDepositarMeta: { backgroundColor: isDark ? '#334155' : '#EFF6FF', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
+  btnDepositarMetaTexto: { color: isDark ? '#93C5FD' : '#3B82F6', fontWeight: 'bold', fontSize: 13 },
+  graficoAnualContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, marginHorizontal: 20, paddingVertical: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   graficoMesColuna: { alignItems: 'center', marginHorizontal: 12 },
   graficoBarrasContainer: { flexDirection: 'row', alignItems: 'flex-end', height: 150, marginBottom: 10 },
   graficoBarra: { width: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4, marginHorizontal: 2 },
   bgVerde: { backgroundColor: '#10B981' },
   bgVermelho: { backgroundColor: '#EF4444' },
-  graficoMesLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+  graficoMesLabel: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' },
   graficoLegenda: { flexDirection: 'row', justifyContent: 'center', marginTop: 15 },
-  biometriaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F1F5F9', padding: 15, borderRadius: 12, marginTop: 10 },
-  labelBiometria: { fontSize: 16, fontWeight: '600', color: '#1E293B' },
-  dicaBiometria: { fontSize: 12, color: '#94A3B8', marginTop: 8, marginBottom: 15, paddingHorizontal: 5 },
-  perfilHeader: { alignItems: 'center', backgroundColor: '#FFFFFF', paddingVertical: 40, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  biometriaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? '#334155' : '#F1F5F9', padding: 15, borderRadius: 12, marginTop: 10 },
+  labelBiometria: { fontSize: 16, fontWeight: '600', color: isDark ? '#F8FAFC' : '#1E293B' },
+  dicaBiometria: { fontSize: 12, color: isDark ? '#94A3B8' : '#94A3B8', marginTop: 8, marginBottom: 15, paddingHorizontal: 5 },
+  perfilHeader: { alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 40, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
   perfilAvatarGiga: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
-  perfilNomeGiga: { fontSize: 24, fontWeight: 'bold', color: '#1E293B' },
-  perfilEmailGiga: { fontSize: 14, color: '#64748B', marginTop: 4 },
+  perfilNomeGiga: { fontSize: 24, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  perfilEmailGiga: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 },
   perfilSectionContainer: { paddingHorizontal: 20, marginTop: 25 },
-  perfilSectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#94A3B8', marginBottom: 15, textTransform: 'uppercase', letterSpacing: 1 },
-  perfilOpcaoBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  perfilSectionTitle: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#64748B' : '#94A3B8', marginBottom: 15, textTransform: 'uppercase', letterSpacing: 1 },
+  perfilOpcaoBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   perfilOpcaoLeft: { flexDirection: 'row', alignItems: 'center' },
   perfilIconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  perfilOpcaoTexto: { fontSize: 16, color: '#1E293B', fontWeight: '500' },
-  perfilTagFree: { fontSize: 12, backgroundColor: '#F1F5F9', color: '#64748B', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, fontWeight: 'bold' },
-  btnSair: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 40, marginBottom: 20, marginHorizontal: 20, paddingVertical: 15, backgroundColor: '#FEF2F2', borderRadius: 16 },
-  btnSairTexto: { marginLeft: 10, fontSize: 16, color: '#EF4444', fontWeight: 'bold' },
+  perfilOpcaoTexto: { fontSize: 16, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
+  perfilTagFree: { fontSize: 12, backgroundColor: isDark ? '#334155' : '#F1F5F9', color: isDark ? '#94A3B8' : '#64748B', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, fontWeight: 'bold' },
+  btnSair: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 40, marginBottom: 20, marginHorizontal: 20, paddingVertical: 15, backgroundColor: isDark ? '#7F1D1D' : '#FEF2F2', borderRadius: 16 },
+  btnSairTexto: { marginLeft: 10, fontSize: 16, color: isDark ? '#FCA5A5' : '#EF4444', fontWeight: 'bold' },
   btnAdicionarCategoria: { backgroundColor: '#3B82F6', width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   bolinhaCor: { width: 34, height: 34, borderRadius: 17, marginHorizontal: 6, borderWidth: 3, borderColor: 'transparent' },
-  bolinhaCorAtiva: { borderColor: '#1E293B', transform: [{ scale: 1.1 }] },
-  catEditRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  catEditNome: { fontSize: 16, color: '#1E293B', fontWeight: '500' },
+  bolinhaCorAtiva: { borderColor: isDark ? '#F8FAFC' : '#1E293B', transform: [{ scale: 1.1 }] },
+  catEditRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  catEditNome: { fontSize: 16, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
   categoriasSection: { paddingHorizontal: 20, paddingBottom: 20, marginTop: 10 },
-  categoriasListContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  catRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  categoriasListContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  catRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
   catLeft: { flexDirection: 'row', alignItems: 'center' },
   catBolinha: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
-  catNome: { fontSize: 14, color: '#1E293B', fontWeight: '500' },
+  catNome: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
   catRight: { alignItems: 'flex-end' },
-  catValor: { fontSize: 14, fontWeight: 'bold', color: '#1E293B' },
-  catPercent: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  catValor: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  catPercent: { fontSize: 11, color: isDark ? '#64748B' : '#64748B', marginTop: 2 },
   gridMeses: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%', marginTop: 15 },
-  mesItem: { width: '30%', paddingVertical: 12, alignItems: 'center', borderRadius: 10, marginBottom: 10, backgroundColor: '#F1F5F9' },
+  mesItem: { width: '30%', paddingVertical: 12, alignItems: 'center', borderRadius: 10, marginBottom: 10, backgroundColor: isDark ? '#334155' : '#F1F5F9' },
   mesItemAtivo: { backgroundColor: '#3B82F6' },
-  mesItemTexto: { fontSize: 14, color: '#1E293B', fontWeight: '600' },
+  mesItemTexto: { fontSize: 14, color: isDark ? '#CBD5E1' : '#1E293B', fontWeight: '600' },
   mesItemTextoAtivo: { color: '#FFF', fontWeight: 'bold' },
-  modalAdicionarOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)', justifyContent: 'flex-end' },
-  menuAdicionarContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 30, paddingBottom: Platform.OS === 'ios' ? 50 : 30, alignItems: 'center' },
+  modalAdicionarOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'flex-end' },
+  menuAdicionarContent: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 30, paddingBottom: Platform.OS === 'ios' ? 50 : 30, alignItems: 'center' },
   menuAdicionarHeader: { marginBottom: 25 },
-  menuAdicionarTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  menuAdicionarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   menuAdicionarBotoes: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
   menuAdicionarOpcao: { alignItems: 'center', flex: 1 },
   iconBoxAdicionar: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  menuAdicionarTexto: { fontSize: 15, fontWeight: '600', color: '#334155' },
+  menuAdicionarTexto: { fontSize: 15, fontWeight: '600', color: isDark ? '#CBD5E1' : '#334155' },
   drawerOverlay: { flex: 1, flexDirection: 'row' },
-  drawerContent: { width: '75%', backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 5, height: 0 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10, zIndex: 2 },
-  drawerCloseArea: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)' },
-  drawerHeader: { backgroundColor: '#1E293B', paddingTop: 60, paddingBottom: 30, alignItems: 'center', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-  avatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 3, borderColor: '#FAFAFA' },
+  drawerContent: { width: '75%', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 5, height: 0 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10, zIndex: 2 },
+  drawerCloseArea: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)' },
+  drawerHeader: { backgroundColor: isDark ? '#0F172A' : '#1E293B', paddingTop: 60, paddingBottom: 30, alignItems: 'center', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  avatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 3, borderColor: isDark ? '#1E293B' : '#FAFAFA' },
   drawerName: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
   drawerSubtitle: { color: '#94A3B8', fontSize: 13, marginTop: 4 },
-  drawerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 25, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  drawerItemText: { marginLeft: 15, fontSize: 16, color: '#334155', fontWeight: '500' },
+  drawerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 25, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  drawerItemText: { marginLeft: 15, fontSize: 16, color: isDark ? '#CBD5E1' : '#334155', fontWeight: '500' },
   monthSelectorContainer: { paddingHorizontal: 20, marginTop: 20, marginBottom: 15, alignItems: 'flex-start' },
-  monthPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
-  monthPillText: { fontSize: 14, fontWeight: '600', color: '#1E293B' },
+  monthPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  monthPillText: { fontSize: 14, fontWeight: '600', color: isDark ? '#F8FAFC' : '#1E293B' },
   cardsContainer: { paddingHorizontal: 20, gap: 12, marginBottom: 25 },
   summaryCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderRadius: 16 },
   summaryLabel: { fontSize: 13, fontWeight: '600', marginBottom: 5 },
   summaryValue: { fontSize: 22, fontWeight: 'bold' },
   visaoGeralSection: { paddingHorizontal: 20, marginBottom: 25 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 15 },
-  gridContainer: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' },
-  gridItem: { width: '22%', alignItems: 'center' },
-  iconBox: { width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  gridValue: { fontSize: 12, fontWeight: 'bold', color: '#1E293B', textAlign: 'center' },
-  gridLabel: { fontSize: 10, color: '#64748B', textAlign: 'center', marginTop: 2 },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B', marginBottom: 15 },
   chartSection: { paddingHorizontal: 20, paddingBottom: 10 },
-  chartBox: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  chartLabel: { fontSize: 14, color: '#64748B', marginBottom: 15, textAlign: 'center' },
+  chartBox: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  chartLabel: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', marginBottom: 15, textAlign: 'center' },
   barraFundo: { width: '100%', height: 16, backgroundColor: '#10B981', borderRadius: 8, overflow: 'hidden' },
   barraProgresso: { height: '100%', backgroundColor: '#EF4444', borderRadius: 8 },
-  extratoContainer: { flex: 1, backgroundColor: '#FAFAFA' },
+  extratoContainer: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
   extratoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginTop: 20, marginBottom: 10 },
-  extratoTitle: { fontSize: 22, fontWeight: 'bold', color: '#1E293B' },
-  extratoSubtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  extratoTitle: { fontSize: 22, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  extratoSubtitle: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 },
   btnExportar: { flexDirection: 'row', backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
   btnExportarText: { color: '#FFF', fontWeight: 'bold', marginLeft: 6, fontSize: 13 },
   extratoMonthSelector: { alignItems: 'center', marginVertical: 10 },
   extratoResumoBoxes: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginBottom: 20 },
-  extratoResumoItem: { flex: 1, backgroundColor: '#FFF', padding: 15, borderRadius: 12, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  extratoResumoLabel: { fontSize: 12, color: '#64748B', marginBottom: 4 },
+  extratoResumoItem: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFF', padding: 15, borderRadius: 12, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  extratoResumoLabel: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', marginBottom: 4 },
   extratoResumoValor: { fontSize: 16, fontWeight: 'bold' },
-  textoVazio: { textAlign: 'center', color: '#94A3B8', marginTop: 30, fontSize: 15 },
-  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: '#FFFFFF', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', position: 'absolute', bottom: 0, width: '100%', zIndex: 10 },
+  textoVazio: { textAlign: 'center', color: isDark ? '#64748B' : '#94A3B8', marginTop: 30, fontSize: 15 },
+  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', position: 'absolute', bottom: 0, width: '100%', zIndex: 10 },
   navItem: { alignItems: 'center', flex: 1 },
-  navText: { fontSize: 10, color: '#94A3B8', marginTop: 4, fontWeight: '500' },
+  navText: { fontSize: 10, color: isDark ? '#64748B' : '#94A3B8', marginTop: 4, fontWeight: '500' },
   navTextAtivo: { color: '#3B82F6', fontWeight: 'bold' },
   fabWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fabBtn: { backgroundColor: '#3B82F6', width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 30, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
   cardFixado: { borderLeftWidth: 4, borderLeftColor: '#3B82F6' },
   listCardInfo: { flex: 1 },
-  listCardTitle: { fontSize: 16, fontWeight: '600', color: '#0F172A' },
-  listCardCategory: { fontSize: 13, color: '#64748B', marginTop: 4 },
+  listCardTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F8FAFC' : '#0F172A' },
+  listCardCategory: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 },
   listCardValue: { fontSize: 16, fontWeight: 'bold' },
-  dataVencimentoText: { fontSize: 11, color: '#94A3B8', marginTop: 4 },
-  verde: { color: '#15803D' },
-  vermelho: { color: '#B91C1C' },
+  dataVencimentoText: { fontSize: 11, color: isDark ? '#64748B' : '#94A3B8', marginTop: 4 },
+  verde: { color: isDark ? '#34D399' : '#15803D' },
+  vermelho: { color: isDark ? '#F87171' : '#B91C1C' },
   swipeable: { borderRadius: 12, overflow: 'hidden' },
   rightActions: { flexDirection: 'row' },
   leftActions: { flexDirection: 'row' },
@@ -1001,43 +741,37 @@ const styles = StyleSheet.create({
   btnExcluir: { backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', width: 75, height: '100%' },
   btnFixar: { backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', width: 100, height: '100%' },
   textoAcao: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
-  modalFundo: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'flex-end' },
-  modalConteudo: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '92%' },
+  modalFundo: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'flex-end' },
+  modalConteudo: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '92%' },
   modalCabecalho: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  modalTitulo: { fontSize: 20, fontWeight: 'bold', color: '#1E293B' },
-  modalFechar: { fontSize: 20, color: '#64748B', fontWeight: 'bold', padding: 10 },
-  label: { fontSize: 14, fontWeight: '600', color: '#475569', marginBottom: 6, marginTop: 12 },
-  labelPequeno: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 6 },
-  input: { backgroundColor: '#F1F5F9', borderRadius: 12, padding: 14, fontSize: 15, color: '#1E293B' },
+  modalTitulo: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  modalFechar: { fontSize: 20, color: isDark ? '#94A3B8' : '#64748B', fontWeight: 'bold', padding: 10 },
+  label: { fontSize: 14, fontWeight: '600', color: isDark ? '#CBD5E1' : '#475569', marginBottom: 6, marginTop: 12 },
+  labelPequeno: { fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B', marginBottom: 6 },
+  input: { backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 12, padding: 14, fontSize: 15, color: isDark ? '#F8FAFC' : '#1E293B' },
   linhaDupla: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   metadeInput: { width: '48%' },
-  seletorDuplo: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 15, padding: 4 },
-  botaoTipo: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12 },
-  botaoTipoAtivoDespesa: { backgroundColor: '#EF4444' },
-  botaoTipoAtivoReceita: { backgroundColor: '#10B981' },
-  textoBotaoTipo: { fontSize: 15, fontWeight: '600', color: '#64748B' },
-  textoBranco: { color: '#FFFFFF' },
   linhaBotoesOpcao: { flexDirection: 'row', justifyContent: 'space-between' },
-  opcaoBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 10, marginHorizontal: 3 },
+  opcaoBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 10, marginHorizontal: 3 },
   opcaoBtnAtivo: { backgroundColor: '#3B82F6' },
-  textoOpcao: { fontSize: 12, fontWeight: '600', color: '#64748B' },
-  calculoParcelaTexto: { color: '#3B82F6', fontSize: 13, fontWeight: '600', marginTop: 6 },
+  textoOpcao: { fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' },
+  calculoParcelaTexto: { color: isDark ? '#60A5FA' : '#3B82F6', fontSize: 13, fontWeight: '600', marginTop: 6 },
   listaCategorias: { flexDirection: 'row', marginBottom: 5 },
-  pillCategoria: { backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
+  pillCategoria: { backgroundColor: isDark ? '#334155' : '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
   pillCategoriaAtiva: { backgroundColor: '#3B82F6' },
-  textoPill: { fontSize: 13, fontWeight: '500', color: '#64748B' },
-  inputDataBtn: { backgroundColor: '#F1F5F9', borderRadius: 12, padding: 14, alignItems: 'center' },
-  inputDataTexto: { fontSize: 14, color: '#1E293B', fontWeight: '500' },
+  textoPill: { fontSize: 13, fontWeight: '500', color: isDark ? '#CBD5E1' : '#64748B' },
+  inputDataBtn: { backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 12, padding: 14, alignItems: 'center' },
+  inputDataTexto: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
   botaoSalvar: { backgroundColor: '#3B82F6', paddingVertical: 15, borderRadius: 15, alignItems: 'center', marginTop: 25, marginBottom: 20 },
   textoBotaoSalvar: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  modalFundoCentro: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.65)', justifyContent: 'center', alignItems: 'center' },
-  calendarioBox: { width: '85%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, alignItems: 'center' },
+  modalFundoCentro: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center' },
+  calendarioBox: { width: '85%', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 20, alignItems: 'center' },
   calTopo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10 },
   calSeta: { fontSize: 22, fontWeight: 'bold', color: '#3B82F6', paddingHorizontal: 10 },
-  calTitulo: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
+  calTitulo: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   gridDias: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', width: '100%' },
   diaItem: { width: '14.2%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 2 },
-  diaTexto: { fontSize: 14, color: '#1E293B', fontWeight: '500' },
-  btnFecharCal: { marginTop: 15, paddingVertical: 8, paddingHorizontal: 20, backgroundColor: '#F1F5F9', borderRadius: 10 },
-  textoFecharCal: { color: '#64748B', fontWeight: 'bold', fontSize: 13 }
+  diaTexto: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
+  btnFecharCal: { marginTop: 15, paddingVertical: 8, paddingHorizontal: 20, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 10 },
+  textoFecharCal: { color: isDark ? '#CBD5E1' : '#64748B', fontWeight: 'bold', fontSize: 13 }
 });
