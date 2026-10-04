@@ -593,11 +593,20 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
-
 const dynamicStyles = (isDark) => StyleSheet.create({
   container: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
   scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  topBar: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingTop: Platform.OS === 'ios' ? 12 : 15, 
+    paddingBottom: 15, 
+    backgroundColor: isDark ? '#1E293B' : '#FFFFFF', 
+    borderBottomWidth: 1, 
+    borderBottomColor: isDark ? '#334155' : '#F1F5F9' 
+  },
   topBarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   topBarIcon: { padding: 5 },
   notificationBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: isDark ? '#1E293B' : '#FFFFFF' },
