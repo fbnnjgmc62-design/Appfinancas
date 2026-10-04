@@ -595,7 +595,7 @@ export default function App() {
 }
 
 const dynamicStyles = (isDark) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FFFFFF' },
+  container: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
   scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
   topBarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
