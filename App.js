@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, Alert, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Switch, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, Alert, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Switch, RefreshControl, ActivityIndicator } from 'react-native';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
+import Auth from './Auth';
 
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+
   const [abaAtual, setAbaAtual] = useState('dashboard'); 
   
   const dataHoje = new Date();
@@ -21,7 +26,7 @@ export default function App() {
   const [categoriasExpandidas, setCategoriasExpandidas] = useState({});
 
   const [perfilNome, setPerfilNome] = useState('Dinho');
-  const [perfilEmail, setPerfilEmail] = useState('dinho@email.com.br');
+  const [perfilEmail, setPerfilEmail] = useState('');
   const [modalEditarPerfilVisivel, setModalEditarPerfilVisivel] = useState(false);
   const [modalSegurancaVisivel, setModalSegurancaVisivel] = useState(false);
   const [biometriaAtiva, setBiometriaAtiva] = useState(false);
@@ -33,7 +38,26 @@ export default function App() {
   const [transacoes, setTransacoes] = useState([]);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        setPerfilEmail(session.user.email || '');
+      }
+      setLoadingSession(false);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        setPerfilEmail(session.user.email || '');
+      }
+    });
+
     carregarDados();
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   const carregarDados = async () => {
@@ -65,6 +89,11 @@ export default function App() {
     } catch (e) {
       console.log('Erro ao carregar dados', e);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
   };
 
   const atualizarTransacoes = async (novasTransacoes) => {
@@ -127,7 +156,7 @@ export default function App() {
   const [calAno, setCalAno] = useState(dataHoje.getFullYear());
 
   const nomesMeses = { '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril', '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto', '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro' };
-  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, nome: 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
+  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, 'nome': 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -452,6 +481,18 @@ export default function App() {
     return 'Dashboard';
   };
 
+  if (loadingSession) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
+  if (!session) {
+    return <Auth onLoginSuccess={(user) => setSession({ user })} />;
+  }
+
   const renderDashboard = () => (
     <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <View style={styles.monthSelectorContainer}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color="#1E293B" style={{ marginLeft: 5 }} /></TouchableOpacity></View>
@@ -510,7 +551,59 @@ export default function App() {
   };
 
   const renderPerfil = () => (
-    <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}><View style={styles.perfilHeader}><View style={styles.perfilAvatarGiga}><Feather name="user" size={45} color="#FFF" /></View><Text style={styles.perfilNomeGiga}>{perfilNome}</Text><Text style={styles.perfilEmailGiga}>{perfilEmail}</Text></View><View style={styles.perfilSectionContainer}><Text style={styles.perfilSectionTitle}>Minha Conta</Text><TouchableOpacity style={styles.perfilOpcaoBtn} onPress={() => setModalEditarPerfilVisivel(true)}><View style={styles.perfilOpcaoLeft}><View style={[styles.perfilIconBox, { backgroundColor: '#EFF6FF' }]}><Feather name="edit-2" size={20} color="#3B82F6" /></View><Text style={styles.perfilOpcaoTexto}>Editar Perfil</Text></View><Feather name="chevron-right" size={20} color="#CBD5E1" /></TouchableOpacity><TouchableOpacity style={styles.perfilOpcaoBtn} onPress={() => setModalSegurancaVisivel(true)}><View style={styles.perfilOpcaoLeft}><View style={[styles.perfilIconBox, { backgroundColor: '#FEF2F2' }]}><Feather name="shield" size={20} color="#EF4444" /></View><Text style={styles.perfilOpcaoTexto}>Segurança e Senhas</Text></View><Feather name="chevron-right" size={20} color="#CBD5E1" /></TouchableOpacity><TouchableOpacity style={styles.perfilOpcaoBtn}><View style={styles.perfilOpcaoLeft}><View style={[styles.perfilIconBox, { backgroundColor: '#F0FDF4' }]}><Feather name="credit-card" size={20} color="#10B981" /></View><Text style={styles.perfilOpcaoTexto}>Assinatura (Premium)</Text></View><Text style={styles.perfilTagFree}>Plano Grátis</Text></TouchableOpacity></View><View style={styles.perfilSectionContainer}><Text style={styles.perfilSectionTitle}>Aplicativo</Text><TouchableOpacity style={styles.perfilOpcaoBtn}><View style={styles.perfilOpcaoLeft}><View style={[styles.perfilIconBox, { backgroundColor: '#F1F5F9' }]}><Feather name="moon" size={20} color="#64748B" /></View><Text style={styles.perfilOpcaoTexto}>Modo Escuro</Text></View><Feather name="toggle-left" size={24} color="#CBD5E1" /></TouchableOpacity><TouchableOpacity style={styles.perfilOpcaoBtn}><View style={styles.perfilOpcaoLeft}><View style={[styles.perfilIconBox, { backgroundColor: '#F1F5F9' }]}><Feather name="help-circle" size={20} color="#64748B" /></View><Text style={styles.perfilOpcaoTexto}>Central de Ajuda</Text></View><Feather name="chevron-right" size={20} color="#CBD5E1" /></TouchableOpacity></View><TouchableOpacity style={styles.btnSair}><Feather name="log-out" size={20} color="#EF4444" /><Text style={styles.btnSairTexto}>Sair do Aplicativo</Text></TouchableOpacity><View style={{height: 100}} /></ScrollView>
+    <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.perfilHeader}>
+        <View style={styles.perfilAvatarGiga}><Feather name="user" size={45} color="#FFF" /></View>
+        <Text style={styles.perfilNomeGiga}>{perfilNome}</Text>
+        <Text style={styles.perfilEmailGiga}>{perfilEmail || 'Sem e-mail conectado'}</Text>
+      </View>
+      <View style={styles.perfilSectionContainer}>
+        <Text style={styles.perfilSectionTitle}>Minha Conta</Text>
+        <TouchableOpacity style={styles.perfilOpcaoBtn} onPress={() => setModalEditarPerfilVisivel(true)}>
+          <View style={styles.perfilOpcaoLeft}>
+            <View style={[styles.perfilIconBox, { backgroundColor: '#EFF6FF' }]}><Feather name="edit-2" size={20} color="#3B82F6" /></View>
+            <Text style={styles.perfilOpcaoTexto}>Editar Perfil</Text>
+          </View>
+          <Feather name="chevron-right" size={20} color="#CBD5E1" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.perfilOpcaoBtn} onPress={() => setModalSegurancaVisivel(true)}>
+          <View style={styles.perfilOpcaoLeft}>
+            <View style={[styles.perfilIconBox, { backgroundColor: '#FEF2F2' }]}><Feather name="shield" size={20} color="#EF4444" /></View>
+            <Text style={styles.perfilOpcaoTexto}>Segurança e Senhas</Text>
+          </View>
+          <Feather name="chevron-right" size={20} color="#CBD5E1" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.perfilOpcaoBtn}>
+          <View style={styles.perfilOpcaoLeft}>
+            <View style={[styles.perfilIconBox, { backgroundColor: '#F0FDF4' }]}><Feather name="credit-card" size={20} color="#10B981" /></View>
+            <Text style={styles.perfilOpcaoTexto}>Assinatura (Premium)</Text>
+          </View>
+          <Text style={styles.perfilTagFree}>Plano Grátis</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.perfilSectionContainer}>
+        <Text style={styles.perfilSectionTitle}>Aplicativo</Text>
+        <TouchableOpacity style={styles.perfilOpcaoBtn}>
+          <View style={styles.perfilOpcaoLeft}>
+            <View style={[styles.perfilIconBox, { backgroundColor: '#F1F5F9' }]}><Feather name="moon" size={20} color="#64748B" /></View>
+            <Text style={styles.perfilOpcaoTexto}>Modo Escuro</Text>
+          </View>
+          <Feather name="toggle-left" size={24} color="#CBD5E1" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.perfilOpcaoBtn}>
+          <View style={styles.perfilOpcaoLeft}>
+            <View style={[styles.perfilIconBox, { backgroundColor: '#F1F5F9' }]}><Feather name="help-circle" size={20} color="#64748B" /></View>
+            <Text style={styles.perfilOpcaoTexto}>Central de Ajuda</Text>
+          </View>
+          <Feather name="chevron-right" size={20} color="#CBD5E1" />
+        </TouchableOpacity>
+      </View>
+      <TouchableOpacity style={styles.btnSair} onPress={handleLogout}>
+        <Feather name="log-out" size={20} color="#EF4444" />
+        <Text style={styles.btnSairTexto}>Sair do Aplicativo</Text>
+      </TouchableOpacity>
+      <View style={{height: 100}} />
+    </ScrollView>
   );
 
   const renderVisaoAnual = () => {
