@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, Alert
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StatusBar } from 'expo-status-bar';
 import { supabase } from './supabase';
 import Auth from './Auth';
 
@@ -10,7 +11,6 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
-
   const [abaAtual, setAbaAtual] = useState('dashboard'); 
   
   const dataHoje = new Date();
@@ -38,6 +38,7 @@ export default function App() {
   const [categorias, setCategorias] = useState([]);
   const [transacoes, setTransacoes] = useState([]);
 
+  // GESTÃO DE SESSÃO E DADOS DA NUVEM
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -57,11 +58,23 @@ export default function App() {
     });
 
     carregarConfiguracoesLocais();
-
-    return () => {
-      authListener?.subscription?.unsubscribe();
-    };
+    return () => authListener?.subscription?.unsubscribe();
   }, []);
+
+  // INJEÇÃO WEB PARA CORRIGIR A BARRA DE STATUS DO PWA NO SAFARI
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const corFundo = isDarkMode ? '#0F172A' : '#FAFAFA';
+      document.body.style.backgroundColor = corFundo;
+      let metaThemeColor = document.querySelector("meta[name=theme-color]");
+      if (!metaThemeColor) {
+        metaThemeColor = document.createElement("meta");
+        metaThemeColor.name = "theme-color";
+        document.head.appendChild(metaThemeColor);
+      }
+      metaThemeColor.setAttribute("content", isDarkMode ? '#1E293B' : '#FFFFFF');
+    }
+  }, [isDarkMode]);
 
   const carregarConfiguracoesLocais = async () => {
     try {
@@ -86,46 +99,24 @@ export default function App() {
         ];
         setCategorias(categoriasPadrao);
       }
-    } catch (e) {
-      console.log('Erro ao carregar configurações locais', e);
-    }
+    } catch (e) { console.log(e); }
   };
 
   const carregarDadosNuvem = async (userId) => {
     try {
-      const { data, error } = await supabase
-        .from('transacoes')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.log('Erro ao buscar transações do Supabase:', error.message);
-      } else if (data) {
-        // Mapear colunas do banco para o formato do app
-        const transacoesFormatadas = data.map(t => ({
-          id: t.id,
-          descricao: t.descricao,
-          valor: Number(t.valor),
-          tipo: t.tipo,
-          categoria: t.categoria,
-          modalidade: t.modalidade,
-          dataCompra: t.data_compra,
-          dataVencimento: t.data_vencimento,
-          fixado: t.fixado
-        }));
-        setTransacoes(transacoesFormatadas);
+      const { data, error } = await supabase.from('transacoes').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+      if (data && !error) {
+        setTransacoes(data.map(t => ({
+          id: t.id, descricao: t.descricao, valor: Number(t.valor), tipo: t.tipo, categoria: t.categoria, modalidade: t.modalidade, dataCompra: t.data_compra, dataVencimento: t.data_vencimento, fixado: t.fixado
+        })));
       }
-    } catch (e) {
-      console.log('Erro de conexão com a nuvem', e);
-    }
+    } catch (e) { console.log(e); }
   };
 
   const toggleTema = async () => {
     const novoTema = !isDarkMode;
     setIsDarkMode(novoTema);
-    try { await AsyncStorage.setItem('@temaEscuro', JSON.stringify(novoTema)); } 
-    catch (e) { console.log('Erro ao salvar tema', e); }
+    try { await AsyncStorage.setItem('@temaEscuro', JSON.stringify(novoTema)); } catch (e) { }
   };
 
   const handleLogout = async () => {
@@ -134,38 +125,14 @@ export default function App() {
     setTransacoes([]);
   };
 
-  const salvarTransacaoNaNuvem = async (novaTransacaoObj) => {
-    if (!session?.user) return;
-    const { error } = await supabase.from('transacoes').insert([{
-      id: novaTransacaoObj.id,
-      user_id: session.user.id,
-      descricao: novaTransacaoObj.descricao,
-      valor: novaTransacaoObj.valor,
-      tipo: novaTransacaoObj.tipo,
-      categoria: novaTransacaoObj.categoria,
-      modalidade: novaTransacaoObj.modalidade,
-      data_compra: novaTransacaoObj.dataCompra,
-      data_vencimento: novaTransacaoObj.dataVencimento,
-      fixado: novaTransacaoObj.fixado
-    }]);
-
-    if (error) console.log('Erro ao salvar na nuvem:', error.message);
-  };
-
-  const atualizarTransacoes = async (novasTransacoes) => {
-    setTransacoes(novasTransacoes);
-  };
-
   const atualizarCategorias = async (novasCategorias) => {
     setCategorias(novasCategorias);
-    try { await AsyncStorage.setItem('@categorias', JSON.stringify(novasCategorias)); } 
-    catch (e) { console.log('Erro ao salvar categorias', e); }
+    try { await AsyncStorage.setItem('@categorias', JSON.stringify(novasCategorias)); } catch (e) { }
   };
 
   const atualizarMetas = async (novasMetas) => {
     setMetas(novasMetas);
-    try { await AsyncStorage.setItem('@metas', JSON.stringify(novasMetas)); } 
-    catch (e) { console.log('Erro ao salvar metas', e); }
+    try { await AsyncStorage.setItem('@metas', JSON.stringify(novasMetas)); } catch (e) { }
   };
 
   const [modalNovaMetaVisivel, setModalNovaMetaVisivel] = useState(false);
@@ -214,11 +181,8 @@ export default function App() {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    if (session?.user) {
-      carregarDadosNuvem(session.user.id).then(() => setRefreshing(false));
-    } else {
-      setRefreshing(false);
-    }
+    if (session?.user) { carregarDadosNuvem(session.user.id).then(() => setRefreshing(false)); } 
+    else { setRefreshing(false); }
   }, [session]);
 
   const styles = dynamicStyles(isDarkMode);
@@ -233,9 +197,7 @@ export default function App() {
   });
 
   const transacoesOrdenadasDoMes = [...transacoesDoMes].sort((a, b) => {
-    if (a.fixado && !b.fixado) return -1;
-    if (!a.fixado && b.fixado) return 1;
-    return 0;
+    if (a.fixado && !b.fixado) return -1; if (!a.fixado && b.fixado) return 1; return 0;
   });
 
   const receitas = transacoesDoMes.filter(t => t.tipo === 'entrada').reduce((acc, t) => acc + t.valor, 0);
@@ -243,7 +205,6 @@ export default function App() {
   const saldo = receitas - despesas;
   const porcentagemDespesa = receitas > 0 ? (despesas / receitas) * 100 : (despesas > 0 ? 100 : 0);
   const porcentagemLimitada = Math.min(porcentagemDespesa, 100);
-
   const mesAtualNome = nomesMeses[mesSelecionado.split('/')[0]];
   const anoAtual = mesSelecionado.split('/')[1];
 
@@ -255,11 +216,7 @@ export default function App() {
         mapaCategorias[t.categoria] += t.valor;
       }
     });
-    return Object.keys(mapaCategorias).map(cat => ({
-      nome: cat,
-      total: mapaCategorias[cat],
-      porcentagem: despesas > 0 ? ((mapaCategorias[cat] / despesas) * 100) : 0
-    })).sort((a, b) => b.total - a.total);
+    return Object.keys(mapaCategorias).map(cat => ({ nome: cat, total: mapaCategorias[cat], porcentagem: despesas > 0 ? ((mapaCategorias[cat] / despesas) * 100) : 0 })).sort((a, b) => b.total - a.total);
   };
   const despesasAgrupadas = calcularDespesasPorCategoria();
 
@@ -280,9 +237,7 @@ export default function App() {
   };
 
   const mudarMes = (direcao) => {
-    let [mes, ano] = mesSelecionado.split('/');
-    let mesNum = parseInt(mes, 10);
-    let anoNum = parseInt(ano, 10);
+    let [mes, ano] = mesSelecionado.split('/'); let mesNum = parseInt(mes, 10); let anoNum = parseInt(ano, 10);
     if (direcao === 'voltar') { mesNum -= 1; if (mesNum === 0) { mesNum = 12; anoNum -= 1; } } 
     else { mesNum += 1; if (mesNum === 13) { mesNum = 1; anoNum += 1; } }
     setMesSelecionado(`${mesNum.toString().padStart(2, '0')}/${anoNum}`);
@@ -290,15 +245,12 @@ export default function App() {
 
   const abrirSeletorMes = () => { setAnoTemp(parseInt(anoAtual)); setModalMesVisivel(true); };
   const escolherMes = (mesNum) => { setMesSelecionado(`${mesNum.toString().padStart(2, '0')}/${anoTemp}`); setModalMesVisivel(false); };
-  
   const abrirCalendario = (campo) => { 
-    setCampoDataAtivo(campo); 
-    let dataReferencia = campo === 'meta_alvo' ? novaMetaDataAlvo : novaDataCompra;
+    setCampoDataAtivo(campo); let dataReferencia = campo === 'meta_alvo' ? novaMetaDataAlvo : novaDataCompra;
     const partes = dataReferencia.split('/');
     if (partes.length === 3) { setCalMes(parseInt(partes[1], 10)); setCalAno(parseInt(partes[2], 10)); }
     setCalendarioVisivel(true); 
   };
-  
   const selecionarDia = (dia) => {
     const dataFormatada = `${dia.toString().padStart(2, '0')}/${calMes.toString().padStart(2, '0')}/${calAno}`;
     if (campoDataAtivo === 'meta_alvo') setNovaMetaDataAlvo(dataFormatada);
@@ -306,239 +258,114 @@ export default function App() {
     else setNovaDataVencimento(dataFormatada); 
     setCalendarioVisivel(false);
   };
-  
-  const diasNoMes = new Date(calAno, calMes, 0).getDate();
-  const arrayDias = Array.from({ length: diasNoMes }, (_, i) => i + 1);
+  const arrayDias = Array.from({ length: new Date(calAno, calMes, 0).getDate() }, (_, i) => i + 1);
 
   const escolherTipoTransacao = (tipo) => {
-    const hoje = new Date();
-    const dataHojeFormatada = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
+    const hoje = new Date(); const dataHojeFormatada = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
     setNovoTipo(tipo); setNovaCategoriaForm(tipo === 'entrada' ? 'Renda' : 'Cartão de Crédito'); setNovaDataCompra(dataHojeFormatada); setNovaDataVencimento(dataHojeFormatada); 
     setMenuAdicionarVisivel(false); setTimeout(() => { setModalVisivel(true); }, 150);
   };
-
   const fecharModal = () => { setModalVisivel(false); setIdEditando(null); setNovaDescricao(''); setNovoValor(''); setNovaModalidade('a_vista'); setQtdParcelas('2'); setNovoTipo('saida'); setNovaCategoriaForm('Cartão de Crédito'); setCalendarioVisivel(false); };
-
   const abrirEdicao = (item) => {
-    setIdEditando(item.id); setNovoTipo(item.tipo); setNovaModalidade(item.modalidade || 'a_vista'); setNovaDescricao(item.descricao);
-    setNovaCategoriaForm(item.categoria); setNovoValor(item.valor.toString()); setNovaDataCompra(item.dataCompra); setNovaDataVencimento(item.dataVencimento);
-    setModalVisivel(true);
+    setIdEditando(item.id); setNovoTipo(item.tipo); setNovaModalidade(item.modalidade || 'a_vista'); setNovaDescricao(item.descricao); setNovaCategoriaForm(item.categoria); setNovoValor(item.valor.toString()); setNovaDataCompra(item.dataCompra); setNovaDataVencimento(item.dataVencimento); setModalVisivel(true);
   };
 
+  // LÓGICA DE SALVAR/EDITAR/APAGAR COM SINCRONIZAÇÃO SUPABASE (O SEGREDO DA COMUNICAÇÃO)
   const salvarTransacao = async () => {
     if (!novaDescricao || !novoValor) { Platform.OS === 'web' ? window.alert("Preencha a descrição e o valor.") : Alert.alert("Erro", "Preencha a descrição e o valor."); return; }
-    if (novaModalidade !== 'fixa' && !novaDataCompra) { Platform.OS === 'web' ? window.alert("Selecione a data da transação.") : Alert.alert("Erro", "Selecione a data da transação."); return; }
-    
     const valorTotal = parseFloat(novoValor.replace(',', '.'));
-    let dataBaseCompra = novaDataCompra; 
-    let vencimentoBase = novoTipo === 'entrada' ? novaDataCompra : (novaDataVencimento || novaDataCompra);
-
-    if (novoTipo === 'saida' && novaModalidade === 'fixa') {
-      dataBaseCompra = `01/${mesSelecionado}`;
-      vencimentoBase = `01/${mesSelecionado}`;
-    }
-
-    const somarMesesData = (dataStr, qtdMeses) => { 
-      const partes = dataStr.split('/'); 
-      let d = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1 + qtdMeses, parseInt(partes[0], 10)); 
-      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`; 
-    };
+    let dataBaseCompra = novaDataCompra; let vencimentoBase = novoTipo === 'entrada' ? novaDataCompra : (novaDataVencimento || novaDataCompra);
+    if (novoTipo === 'saida' && novaModalidade === 'fixa') { dataBaseCompra = `01/${mesSelecionado}`; vencimentoBase = `01/${mesSelecionado}`; }
+    const somarMesesData = (dataStr, qtdMeses) => { const partes = dataStr.split('/'); let d = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1 + qtdMeses, parseInt(partes[0], 10)); return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`; };
 
     if (idEditando) {
-      const atualizada = { descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, categoria: novaCategoriaForm, modalidade: novaModalidade, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase };
-      const { error } = await supabase.from('transacoes').update({
-        descricao: novaDescricao,
-        valor: valorTotal,
-        tipo: novoTipo,
-        categoria: novaCategoriaForm,
-        modalidade: novaModalidade,
-        data_compra: dataBaseCompra,
-        data_vencimento: vencimentoBase
-      }).eq('id', idEditando);
-
+      const atualizada = { descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, categoria: novaCategoriaForm, modalidade: novaModalidade, data_compra: dataBaseCompra, data_vencimento: vencimentoBase };
+      const { error } = await supabase.from('transacoes').update(atualizada).eq('id', idEditando);
       if (!error) {
-        setTransacoes(transacoes.map(t => t.id === idEditando ? { ...t, ...atualizada } : t));
+        setTransacoes(transacoes.map(t => t.id === idEditando ? { ...t, ...atualizada, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase } : t));
       }
     } else {
+      let novas = [];
       if (novoTipo === 'saida' && novaModalidade === 'parcelada') {
-        const nParcelas = Math.max(parseInt(qtdParcelas, 10) || 2, 2); 
-        const valorParcela = parseFloat((valorTotal / nParcelas).toFixed(2)); 
-        let novas = [];
+        const nParcelas = Math.max(parseInt(qtdParcelas, 10) || 2, 2); const valorParcela = parseFloat((valorTotal / nParcelas).toFixed(2));
         for (let i = 0; i < nParcelas; i++) {
-          const itemNovo = { 
-            id: `${Date.now()}_${i}`, 
-            descricao: `${novaDescricao} [${i + 1}/${nParcelas}]`, 
-            valor: valorParcela, 
-            tipo: 'saida', 
-            modalidade: 'parcelada', 
-            parcelasInfo: `${i + 1}/${nParcelas}`, 
-            categoria: novaCategoriaForm, 
-            dataCompra: dataBaseCompra, 
-            dataVencimento: somarMesesData(vencimentoBase, i), 
-            fixado: false 
-          };
-          novas.push(itemNovo);
-          await salvarTransacaoNaNuvem(itemNovo);
+          novas.push({ id: `${Date.now()}_${i}`, user_id: session.user.id, descricao: `${novaDescricao} [${i + 1}/${nParcelas}]`, valor: valorParcela, tipo: 'saida', modalidade: 'parcelada', categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: somarMesesData(vencimentoBase, i), fixado: false });
         }
-        setTransacoes([...novas, ...transacoes]);
       } else if (novoTipo === 'saida' && novaModalidade === 'fixa') {
-        let recorrentes = [];
         for (let i = 0; i < 12; i++) {
-          const itemRecorrente = { 
-            id: `${Date.now()}_fixa_${i}`, 
-            descricao: `${novaDescricao} (Fixa)`, 
-            valor: valorTotal, 
-            tipo: 'saida', 
-            modalidade: 'fixa', 
-            categoria: novaCategoriaForm, 
-            dataCompra: dataBaseCompra, 
-            dataVencimento: somarMesesData(vencimentoBase, i), 
-            fixado: false 
-          };
-          recorrentes.push(itemRecorrente);
-          await salvarTransacaoNaNuvem(itemRecorrente);
+          novas.push({ id: `${Date.now()}_fixa_${i}`, user_id: session.user.id, descricao: `${novaDescricao} (Fixa)`, valor: valorTotal, tipo: 'saida', modalidade: 'fixa', categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: somarMesesData(vencimentoBase, i), fixado: false });
         }
-        setTransacoes([...recorrentes, ...transacoes]);
       } else {
-        const nova = { 
-          id: Date.now().toString(), 
-          descricao: novaDescricao, 
-          valor: valorTotal, 
-          tipo: novoTipo, 
-          modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, 
-          categoria: novaCategoriaForm, 
-          dataCompra: dataBaseCompra, 
-          dataVencimento: vencimentoBase, 
-          fixado: false 
-        };
-        await salvarTransacaoNaNuvem(nova);
-        setTransacoes([nova, ...transacoes]);
+        novas.push({ id: Date.now().toString(), user_id: session.user.id, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: vencimentoBase, fixado: false });
+      }
+      const { error } = await supabase.from('transacoes').insert(novas);
+      if (!error) {
+        const formatadas = novas.map(n => ({...n, dataCompra: n.data_compra, dataVencimento: n.data_vencimento}));
+        setTransacoes([...formatadas, ...transacoes]);
       }
     }
     fecharModal();
   };
 
-  const adicionarCategoria = () => {
-    if (!novaCategoriaNome.trim()) { Platform.OS === 'web' ? window.alert('O nome da categoria não pode ficar vazio.') : Alert.alert('Erro', 'O nome da categoria não pode ficar vazio.'); return; }
-    const nova = { id: Date.now().toString(), nome: novaCategoriaNome.trim(), cor: novaCategoriaCor };
-    atualizarCategorias([nova, ...categorias]); setNovaCategoriaNome('');
-  };
-
-  const excluirCategoria = (id, nome) => {
-    if (nome === 'Renda' || nome === 'Outros') { Platform.OS === 'web' ? window.alert('Esta é uma categoria do sistema e não pode ser apagada.') : Alert.alert('Aviso', 'Esta é uma categoria do sistema e não pode ser apagada.'); return; }
-    const deletar = () => { atualizarCategorias(categorias.filter(c => c.id !== id)); if (novaCategoriaForm === nome) setNovaCategoriaForm('Outros'); };
-    if (Platform.OS === 'web') { if (window.confirm(`Tem certeza que deseja apagar "${nome}"?`)) { deletar(); } } 
-    else { Alert.alert('Apagar Categoria', `Tem certeza que deseja apagar "${nome}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar', style: 'destructive', onPress: deletar }]); }
-  };
-
   const excluirTransacao = async (id) => { 
     const deletar = async () => {
       const { error } = await supabase.from('transacoes').delete().eq('id', id);
-      if (!error) {
-        setTransacoes(transacoes.filter(t => t.id !== id));
-      }
+      if (!error) setTransacoes(transacoes.filter(t => t.id !== id));
     };
-    if (Platform.OS === 'web') { if (window.confirm("Deseja apagar este registro?")) deletar(); } 
-    else { Alert.alert("Excluir", "Deseja apagar este registro?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
+    if (Platform.OS === 'web') { if (window.confirm("Deseja apagar este registro?")) deletar(); } else { Alert.alert("Excluir", "Deseja apagar?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
   };
 
   const alternarFixar = async (id) => { 
-    const itemAlvo = transacoes.find(t => t.id === id);
-    if (!itemAlvo) return;
-    const novoFixado = !itemAlvo.fixado;
-
-    const { error } = await supabase.from('transacoes').update({ fixado: novoFixado }).eq('id', id);
-    if (!error) {
-      setTransacoes(transacoes.map(t => t.id === id ? { ...t, fixado: novoFixado } : t));
-    }
+    const item = transacoes.find(t => t.id === id);
+    if (!item) return;
+    const novoStatus = !item.fixado;
+    const { error } = await supabase.from('transacoes').update({ fixado: novoStatus }).eq('id', id);
+    if (!error) setTransacoes(transacoes.map(t => t.id === id ? { ...t, fixado: novoStatus } : t));
   };
 
+  const adicionarCategoria = () => {
+    if (!novaCategoriaNome.trim()) { Platform.OS === 'web' ? window.alert('Vazio.') : Alert.alert('Erro', 'Vazio.'); return; }
+    atualizarCategorias([{ id: Date.now().toString(), nome: novaCategoriaNome.trim(), cor: novaCategoriaCor }, ...categorias]); setNovaCategoriaNome('');
+  };
+  const excluirCategoria = (id, nome) => {
+    if (nome === 'Renda' || nome === 'Outros') return;
+    const deletar = () => { atualizarCategorias(categorias.filter(c => c.id !== id)); if (novaCategoriaForm === nome) setNovaCategoriaForm('Outros'); };
+    if (Platform.OS === 'web') { if (window.confirm(`Apagar "${nome}"?`)) { deletar(); } } else { Alert.alert('Apagar Categoria', `Apagar "${nome}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar', style: 'destructive', onPress: deletar }]); }
+  };
   const mostrarDetalhes = (item) => {
     let msg = `Descrição: ${item.descricao}\nCategoria: ${item.categoria}\nData: ${item.dataCompra}\nValor: R$ ${item.valor.toFixed(2)}`;
-    if (item.modalidade) { const rotulos = { a_vista: 'À Vista', parcelada: 'Parcelada', fixa: 'Fixa / Recorrente' }; msg += `\nTipo: ${rotulos[item.modalidade] || item.modalidade}`; }
-    Platform.OS === 'web' ? window.alert(msg) : Alert.alert("Detalhes", msg, [{ text: "Fechar", style: "default" }]);
+    if (item.modalidade) { const rotulos = { a_vista: 'À Vista', parcelada: 'Parcelada', fixa: 'Fixa' }; msg += `\nTipo: ${rotulos[item.modalidade] || item.modalidade}`; }
+    Platform.OS === 'web' ? window.alert(msg) : Alert.alert("Detalhes", msg, [{ text: "Fechar" }]);
   };
 
-  const fecharModalMeta = () => {
-    setModalNovaMetaVisivel(false); setIdEditandoMeta(null); setNovaMetaTitulo(''); setNovaMetaAlvo(''); setNovaMetaValorAtual(''); setNovaMetaCategoria('Outros'); setNovaMetaModalidade('a_vista'); setNovaMetaMeioPagamento('Pix'); setNovaMetaQtdParcelas('2'); setNovaMetaOrigemConta('Conta Corrente'); setNovaMetaDataAlvo(''); setCalendarioVisivel(false);
-  };
-
-  const abrirEdicaoMeta = (meta) => {
-    setIdEditandoMeta(meta.id); setNovaMetaTitulo(meta.titulo); setNovaMetaAlvo(meta.valorAlvo.toString()); setNovaMetaValorAtual(meta.valorAtual ? meta.valorAtual.toString() : '0'); setNovaMetaCategoria(meta.categoria || 'Outros'); setNovaMetaModalidade(meta.modalidade || 'a_vista'); setNovaMetaMeioPagamento(meta.meioPagamento || 'Pix'); setNovaMetaQtdParcelas(meta.qtdParcelas || '2'); setNovaMetaOrigemConta(meta.origemConta || 'Conta Corrente'); setNovaMetaDataAlvo(meta.dataAlvo || ''); setModalNovaMetaVisivel(true);
-  };
-
-  const excluirMeta = (id) => {
-    const deletar = () => atualizarMetas(metas.filter(m => m.id !== id));
-    if (Platform.OS === 'web') { if (window.confirm("Deseja apagar esta meta?")) deletar(); } else { Alert.alert("Excluir", "Deseja apagar esta meta?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
-  };
-
+  const fecharModalMeta = () => { setModalNovaMetaVisivel(false); setIdEditandoMeta(null); setNovaMetaTitulo(''); setNovaMetaAlvo(''); setNovaMetaValorAtual(''); setNovaMetaCategoria('Outros'); setNovaMetaModalidade('a_vista'); setNovaMetaMeioPagamento('Pix'); setNovaMetaQtdParcelas('2'); setNovaMetaOrigemConta('Conta Corrente'); setNovaMetaDataAlvo(''); setCalendarioVisivel(false); };
+  const abrirEdicaoMeta = (meta) => { setIdEditandoMeta(meta.id); setNovaMetaTitulo(meta.titulo); setNovaMetaAlvo(meta.valorAlvo.toString()); setNovaMetaValorAtual(meta.valorAtual ? meta.valorAtual.toString() : '0'); setNovaMetaCategoria(meta.categoria || 'Outros'); setNovaMetaModalidade(meta.modalidade || 'a_vista'); setNovaMetaMeioPagamento(meta.meioPagamento || 'Pix'); setNovaMetaQtdParcelas(meta.qtdParcelas || '2'); setNovaMetaOrigemConta(meta.origemConta || 'Conta Corrente'); setNovaMetaDataAlvo(meta.dataAlvo || ''); setModalNovaMetaVisivel(true); };
+  const excluirMeta = (id) => { const deletar = () => atualizarMetas(metas.filter(m => m.id !== id)); if (Platform.OS === 'web') { if (window.confirm("Apagar?")) deletar(); } else { Alert.alert("Excluir", "Apagar meta?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); } };
   const alternarFixarMeta = (id) => { atualizarMetas(metas.map(m => m.id === id ? { ...m, fixado: !m.fixado } : m)); };
-
   const salvarMeta = () => {
-    if (!novaMetaTitulo || !novaMetaAlvo || !novaMetaDataAlvo) { Platform.OS === 'web' ? window.alert("Preencha o título, o valor alvo e a data planejada!") : Alert.alert("Erro", "Preencha o título, o valor alvo e a data planejada!"); return; }
-    const catEncontrada = categorias.find(c => c.nome === novaMetaCategoria);
-    const corSelecionada = catEncontrada ? catEncontrada.cor : '#3B82F6';
-    const objMeta = { titulo: novaMetaTitulo, valorAlvo: parseFloat(novaMetaAlvo.replace(',', '.')), categoria: novaMetaCategoria, modalidade: novaMetaModalidade, meioPagamento: novaMetaMeioPagamento, qtdParcelas: novaMetaModalidade === 'parcelada' ? novaMetaQtdParcelas : null, origemConta: novaMetaOrigemConta, dataAlvo: novaMetaDataAlvo, cor: corSelecionada };
-    if (idEditandoMeta) {
-      atualizarMetas(metas.map(m => m.id === idEditandoMeta ? { ...m, ...objMeta, valorAtual: parseFloat((novaMetaValorAtual || '0').replace(',', '.')) } : m));
-    } else {
-      atualizarMetas([{ id: Date.now().toString(), ...objMeta, valorAtual: 0, fixado: false }, ...metas]);
-    }
+    if (!novaMetaTitulo || !novaMetaAlvo || !novaMetaDataAlvo) return;
+    const catEncontrada = categorias.find(c => c.nome === novaMetaCategoria); const objMeta = { titulo: novaMetaTitulo, valorAlvo: parseFloat(novaMetaAlvo.replace(',', '.')), categoria: novaMetaCategoria, modalidade: novaMetaModalidade, meioPagamento: novaMetaMeioPagamento, qtdParcelas: novaMetaModalidade === 'parcelada' ? novaMetaQtdParcelas : null, origemConta: novaMetaOrigemConta, dataAlvo: novaMetaDataAlvo, cor: catEncontrada ? catEncontrada.cor : '#3B82F6' };
+    if (idEditandoMeta) { atualizarMetas(metas.map(m => m.id === idEditandoMeta ? { ...m, ...objMeta, valorAtual: parseFloat((novaMetaValorAtual || '0').replace(',', '.')) } : m)); } 
+    else { atualizarMetas([{ id: Date.now().toString(), ...objMeta, valorAtual: 0, fixado: false }, ...metas]); }
     fecharModalMeta();
   };
-
   const depositarNaMeta = async () => {
-    if (!valorDeposito) return; 
-    const valorNum = parseFloat(valorDeposito.replace(',', '.'));
+    if (!valorDeposito) return; const valorNum = parseFloat(valorDeposito.replace(',', '.'));
     atualizarMetas(metas.map(m => m.id === metaSelecionada.id ? { ...m, valorAtual: m.valorAtual + valorNum } : m));
     if (origemDeposito === 'carteira') {
-      const hoje = new Date(); const dataHojeFormatada = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
-      const novaDep = { 
-        id: Date.now().toString() + '_dep', 
-        descricao: `Depósito: ${metaSelecionada.titulo}`, 
-        valor: valorNum, 
-        tipo: 'saida', 
-        modalidade: 'a_vista', 
-        categoria: metaSelecionada.categoria || 'Outros', 
-        dataCompra: dataHojeFormatada, 
-        dataVencimento: dataHojeFormatada, 
-        fixado: false 
-      };
-      await salvarTransacaoNaNuvem(novaDep);
-      setTransacoes([novaDep, ...transacoes]);
+      const hoje = new Date(); const df = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
+      const novaDep = { id: Date.now().toString() + '_dep', user_id: session.user.id, descricao: `Depósito: ${metaSelecionada.titulo}`, valor: valorNum, tipo: 'saida', modalidade: 'a_vista', categoria: metaSelecionada.categoria || 'Outros', data_compra: df, data_vencimento: df, fixado: false };
+      const { error } = await supabase.from('transacoes').insert([novaDep]);
+      if (!error) setTransacoes([{...novaDep, dataCompra: df, dataVencimento: df}, ...transacoes]);
     }
     setModalDepositarVisivel(false); setValorDeposito(''); setMetaSelecionada(null); setOrigemDeposito('carteira');
-    Platform.OS === 'web' ? window.alert("Dinheiro guardado com sucesso!") : Alert.alert("Sucesso", "Dinheiro guardado com sucesso!");
   };
-
   const abrirDepositarMeta = (meta) => { setMetaSelecionada(meta); setOrigemDeposito('carteira'); setModalDepositarVisivel(true); };
+  const lerNotificacao = () => { if (temNotificacao) { Platform.OS === 'web' ? window.alert("Tudo atualizado!") : Alert.alert("Sucesso", "Tudo atualizado!"); setTemNotificacao(false); } else { Platform.OS === 'web' ? window.alert("Sem notificações.") : Alert.alert("Notificações", "Sem notificações."); } };
+  const salvarEdicaoPerfil = async () => { try { await AsyncStorage.setItem('@perfilNome', perfilNome); setModalEditarPerfilVisivel(false); } catch (e) { } };
+  const getTopBarTitle = () => { if (abaAtual === 'dashboard') return 'Dashboard'; if (abaAtual === 'extrato') return 'Extrato Agrupado'; if (abaAtual === 'perfil') return 'Meu Perfil'; if (abaAtual === 'visao_anual') return 'Relatórios'; if (abaAtual === 'metas') return 'Minhas Metas'; return 'Dashboard'; };
 
-  const lerNotificacao = () => {
-    if (temNotificacao) { Platform.OS === 'web' ? window.alert("Tudo atualizado!") : Alert.alert("Sucesso", "Tudo atualizado!"); setTemNotificacao(false); } 
-    else { Platform.OS === 'web' ? window.alert("Sem notificações.") : Alert.alert("Notificações", "Sem notificações."); }
-  };
-
-  const salvarEdicaoPerfil = async () => {
-    try {
-      await AsyncStorage.setItem('@perfilNome', perfilNome);
-      Platform.OS === 'web' ? window.alert('Perfil atualizado!') : Alert.alert('Sucesso', 'Perfil atualizado!'); 
-      setModalEditarPerfilVisivel(false);
-    } catch (e) { console.log('Erro ao salvar perfil', e); }
-  };
-
-  const getTopBarTitle = () => {
-    if (abaAtual === 'dashboard') return 'Dashboard';
-    if (abaAtual === 'extrato') return 'Extrato Agrupado';
-    if (abaAtual === 'perfil') return 'Meu Perfil';
-    if (abaAtual === 'visao_anual') return 'Relatórios';
-    if (abaAtual === 'metas') return 'Minhas Metas';
-    return 'Dashboard';
-  };
-
-  if (loadingSession) {
-    return (<View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color="#3B82F6" /></View>);
-  }
-
+  if (loadingSession) { return (<View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color="#3B82F6" /></View>); }
   if (!session) { return <Auth onLoginSuccess={(user) => setSession({ user })} />; }
 
   const renderDashboard = () => (
@@ -614,13 +441,6 @@ export default function App() {
           </View>
           <Feather name="chevron-right" size={20} color={isDarkMode ? '#475569' : '#CBD5E1'} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.perfilOpcaoBtn}>
-          <View style={styles.perfilOpcaoLeft}>
-            <View style={[styles.perfilIconBox, { backgroundColor: isDarkMode ? '#064E3B' : '#F0FDF4' }]}><Feather name="credit-card" size={20} color={isDarkMode ? '#34D399' : '#10B981'} /></View>
-            <Text style={styles.perfilOpcaoTexto}>Assinatura (Premium)</Text>
-          </View>
-          <Text style={styles.perfilTagFree}>Plano Grátis</Text>
-        </TouchableOpacity>
       </View>
       <View style={styles.perfilSectionContainer}>
         <Text style={styles.perfilSectionTitle}>Aplicativo</Text>
@@ -631,14 +451,6 @@ export default function App() {
             <Text style={styles.perfilOpcaoTexto}>Modo Escuro</Text>
           </View>
           <Switch trackColor={{ false: "#CBD5E1", true: "#3B82F6" }} thumbColor="#FFFFFF" onValueChange={toggleTema} value={isDarkMode} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.perfilOpcaoBtn}>
-          <View style={styles.perfilOpcaoLeft}>
-            <View style={[styles.perfilIconBox, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}><Feather name="help-circle" size={20} color={iconColor} /></View>
-            <Text style={styles.perfilOpcaoTexto}>Central de Ajuda</Text>
-          </View>
-          <Feather name="chevron-right" size={20} color={isDarkMode ? '#475569' : '#CBD5E1'} />
         </TouchableOpacity>
       </View>
       <TouchableOpacity style={styles.btnSair} onPress={handleLogout}>
@@ -700,8 +512,11 @@ export default function App() {
   };
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={styles.container}>
+    <GestureHandlerRootView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
+      {/* O STATUSBAR CORRIGE A COR DAS LETRAS DO IPHONE NO TOPO */}
+      <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor={isDarkMode ? '#1E293B' : '#FFFFFF'} />
+      
+      <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => setMenuAberto(true)} style={styles.topBarIcon}><Feather name="menu" size={28} color={iconColor} /></TouchableOpacity>
           <Text style={styles.topBarTitle}>{getTopBarTitle()}</Text>
@@ -731,7 +546,6 @@ export default function App() {
         <Modal animationType="slide" transparent={true} visible={modalSegurancaVisivel} onRequestClose={() => setModalSegurancaVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Segurança</Text><TouchableOpacity onPress={() => setModalSegurancaVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><View style={styles.biometriaRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><Feather name="smartphone" size={24} color={iconColor} style={{marginRight: 10}} /><Text style={styles.labelBiometria}>Biometria / Face ID</Text></View><Switch trackColor={{ false: "#CBD5E1", true: "#3B82F6" }} thumbColor="#FFFFFF" onValueChange={() => setBiometriaAtiva(!biometriaAtiva)} value={biometriaAtiva} /></View><Text style={styles.dicaBiometria}>Use sua digital ou rosto para entrar no app sem precisar digitar a senha toda vez.</Text><Text style={[styles.sectionTitle, {marginTop: 20}]}>Trocar Senha</Text><Text style={styles.labelPequeno}>Senha Atual</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} /><Text style={styles.labelPequeno}>Nova Senha</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} /><TouchableOpacity style={styles.botaoSalvar} onPress={() => { Platform.OS === 'web' ? window.alert('Senha atualizada com segurança!') : Alert.alert('Segurança', 'Senha atualizada com segurança!'); setModalSegurancaVisivel(false); }}><Text style={styles.textoBotaoSalvar}>Atualizar Senha</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
         <Modal animationType="slide" transparent={true} visible={modalCategoriasVisivel} onRequestClose={() => setModalCategoriasVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Gerenciar Categorias</Text><TouchableOpacity onPress={() => setModalCategoriasVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><Text style={styles.labelPequeno}>Nova Categoria:</Text><View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}><TextInput style={[styles.input, {flex: 1, marginRight: 10, paddingVertical: 10}]} placeholder="Ex: Faculdade" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaCategoriaNome} onChangeText={setNovaCategoriaNome} /><TouchableOpacity style={styles.btnAdicionarCategoria} onPress={adicionarCategoria}><Feather name="plus" size={20} color="#FFF" /></TouchableOpacity></View><Text style={styles.labelPequeno}>Escolha a Cor:</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>{coresDisponiveis.map(cor => (<TouchableOpacity key={cor} style={[styles.bolinhaCor, {backgroundColor: cor}, novaCategoriaCor === cor && styles.bolinhaCorAtiva]} onPress={() => setNovaCategoriaCor(cor)} />))}</ScrollView><Text style={styles.labelPequeno}>Suas Categorias:</Text><FlatList data={categorias} keyExtractor={item => item.id} style={{maxHeight: 300}} renderItem={({item}) => (<View style={styles.catEditRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 12, height: 12, borderRadius: 6, backgroundColor: item.cor, marginRight: 10}} /><Text style={styles.catEditNome}>{item.nome}</Text></View><TouchableOpacity onPress={() => excluirCategoria(item.id, item.nome)} style={{padding: 5}}><Feather name="trash-2" size={20} color="#EF4444" /></TouchableOpacity></View>)} /></View></KeyboardAvoidingView></Modal>
         <Modal visible={menuAberto} transparent={true} animationType="fade" onRequestClose={() => setMenuAberto(false)}><View style={styles.drawerOverlay}><View style={styles.drawerContent}><View style={styles.drawerHeader}><View style={styles.avatarPlaceholder}><Feather name="user" size={32} color="#FFF" /></View><Text style={styles.drawerName}>App Finanças</Text><Text style={styles.drawerSubtitle}>Gestão Inteligente</Text></View><ScrollView><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setAbaAtual('visao_anual'), 200); }}><Feather name="bar-chart-2" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Visão Anual</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setModalCategoriasVisivel(true), 200); }}><Feather name="tag" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Gerenciar Categorias</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="download" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Exportar Relatórios</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="settings" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Configurações</Text></TouchableOpacity></ScrollView></View><TouchableOpacity style={styles.drawerCloseArea} activeOpacity={1} onPress={() => setMenuAberto(false)} /></View></Modal>
-
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -740,7 +554,7 @@ export default function App() {
 const dynamicStyles = (isDark) => StyleSheet.create({
   container: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
   scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 12 : 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
   topBarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   topBarIcon: { padding: 5 },
   notificationBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: isDark ? '#1E293B' : '#FFFFFF' },
@@ -825,7 +639,7 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   menuAdicionarHeader: { marginBottom: 25 },
   menuAdicionarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   menuAdicionarBotoes: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
-  menuAdicionarOpcao: { items: 'center', flex: 1 },
+  menuAdicionarOpcao: { alignItems: 'center', flex: 1 },
   iconBoxAdicionar: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   menuAdicionarTexto: { fontSize: 15, fontWeight: '600', color: isDark ? '#CBD5E1' : '#334155' },
   drawerOverlay: { flex: 1, flexDirection: 'row' },
