@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, Alert, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Switch, RefreshControl, ActivityIndicator } from 'react-native';
-import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
@@ -387,17 +387,47 @@ export default function App() {
     transacoesOrdenadasDoMes.forEach(t => { if (!mapaGrupos[t.categoria]) { const catObj = categorias.find(c => c.nome === t.categoria); mapaGrupos[t.categoria] = { nome: t.categoria, cor: catObj ? catObj.cor : '#94A3B8', transacoes: [], totalEntrada: 0, totalSaida: 0 }; } mapaGrupos[t.categoria].transacoes.push(t); if (t.tipo === 'entrada') mapaGrupos[t.categoria].totalEntrada += t.valor; else mapaGrupos[t.categoria].totalSaida += t.valor; });
     const gruposArray = Object.values(mapaGrupos).sort((a,b) => (b.totalSaida + b.totalEntrada) - (a.totalSaida + a.totalEntrada));
     const alternarCategoria = (catNome) => { setCategoriasExpandidas(prev => ({ ...prev, [catNome]: !prev[catNome] })); };
+    
     const renderCardTransacao = (item) => {
-      const renderRight = () => (<View style={styles.rightActions}><TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicao(item)}><Text style={styles.textoAcao}>✏️</Text></TouchableOpacity><TouchableOpacity style={styles.btnExcluir} onPress={() => excluirTransacao(item.id)}><Text style={styles.textoAcao}>🗑️</Text></TouchableOpacity></View>);
-      const renderLeft = () => (<View style={styles.leftActions}><TouchableOpacity style={styles.btnFixar} onPress={() => alternarFixar(item.id)}><Text style={styles.textoAcao}>{item.fixado ? 'Desfixar' : '📌 Fixar'}</Text></TouchableOpacity></View>);
+      // SUBSTITUIÇÃO DO SWIPEABLE PELOS BOTÕES NATIVOS (RESOLVE O CRASH DE TELA BRANCA NO PC E PWA)
       return (
         <View key={item.id} style={styles.cardContainerGrouped}>
-          <Swipeable renderRightActions={renderRight} renderLeftActions={renderLeft} containerStyle={styles.swipeable}>
-            <TouchableOpacity style={[styles.listCardGrouped, item.fixado && styles.cardFixado]} activeOpacity={0.9} onPress={() => mostrarDetalhes(item)}><View style={styles.listCardInfo}><View style={{ flexDirection: 'row', alignItems: 'center' }}>{item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}<Text style={styles.listCardTitle}>{item.descricao}</Text></View><Text style={styles.dataVencimentoText}>{item.dataCompra}</Text></View><View style={{ alignItems: 'flex-end' }}><Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>{item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}</Text></View></TouchableOpacity>
-          </Swipeable>
+          <View style={[styles.listCardGrouped, item.fixado && styles.cardFixado, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => mostrarDetalhes(item)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={styles.listCardInfo}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}
+                  <Text style={styles.listCardTitle}>{item.descricao}</Text>
+                </View>
+                <Text style={styles.dataVencimentoText}>{item.dataCompra}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>
+                  {item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            
+            {/* Nova linha de Ações Integrada */}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 12 }}>
+              <TouchableOpacity onPress={() => alternarFixar(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
+                <Feather name="pin" size={14} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginLeft: 6, fontWeight: '600' }}>Fixar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
+                <Feather name="edit-2" size={14} color="#3B82F6" />
+                <Text style={{ fontSize: 12, color: "#3B82F6", marginLeft: 6, fontWeight: '600' }}>Editar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Feather name="trash-2" size={14} color="#EF4444" />
+                <Text style={{ fontSize: 12, color: "#EF4444", marginLeft: 6, fontWeight: '600' }}>Apagar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       );
     };
+
     return (
       <ScrollView style={styles.extratoContainer} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View style={styles.extratoHeader}><View><Text style={styles.extratoTitle}>Extrato Agrupado</Text><Text style={styles.extratoSubtitle}>Movimentações organizadas</Text></View><TouchableOpacity style={styles.btnExportar} onPress={() => Platform.OS === 'web' ? window.alert('Gerando PDF...') : Alert.alert('Exportar Extrato', `Gerando PDF...`)}><Feather name="file-text" size={18} color="#FFF" /><Text style={styles.btnExportarText}>Gerar PDF</Text></TouchableOpacity></View>
@@ -478,11 +508,9 @@ export default function App() {
         </View>
         {metasOrdenadas.map((meta) => { 
           const porcentagem = Math.min(((meta.valorAtual || 0) / (meta.valorAlvo || 1)) * 100, 100); 
-          const renderRightMeta = () => (<View style={styles.rightActions}><TouchableOpacity style={styles.btnEditar} onPress={() => abrirEdicaoMeta(meta)}><Text style={styles.textoAcao}>✏️</Text></TouchableOpacity><TouchableOpacity style={styles.btnExcluir} onPress={() => excluirMeta(meta.id)}><Text style={styles.textoAcao}>🗑️</Text></TouchableOpacity></View>);
-          const renderLeftMeta = () => (<View style={styles.leftActions}><TouchableOpacity style={styles.btnFixar} onPress={() => alternarFixarMeta(meta.id)}><Text style={styles.textoAcao}>{meta.fixado ? 'Desfixar' : '📌 Fixar'}</Text></TouchableOpacity></View>);
+          // REMOVIDO SWIPEABLE DAQUI TAMBÉM
           return (
             <View key={meta.id} style={styles.metaCardWrapper}>
-              <Swipeable renderRightActions={renderRightMeta} renderLeftActions={renderLeftMeta} containerStyle={styles.swipeable}>
                 <View style={[styles.metaCard, meta.fixado && styles.cardFixado]}>
                   <View style={styles.metaCardHeader}>
                     <View style={{flexDirection: 'row', alignItems: 'center'}}>{meta.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}<View style={{width: 14, height: 14, borderRadius: 7, backgroundColor: meta.cor, marginRight: 8}} /><Text style={styles.metaCardTitle}>{meta.titulo}</Text></View>
@@ -500,9 +528,25 @@ export default function App() {
                     <Text style={styles.metaValorAlvo}>de R$ {(meta.valorAlvo || 0).toFixed(2)}</Text>
                   </View>
                   <View style={styles.metaBarraFundo}><View style={[styles.metaBarraProgresso, { width: `${porcentagem}%`, backgroundColor: meta.cor }]} /></View>
-                  <View style={styles.metaAcoes}><TouchableOpacity style={styles.btnDepositarMeta} onPress={() => abrirDepositarMeta(meta)}><Text style={styles.btnDepositarMetaTexto}>Guardar Dinheiro</Text></TouchableOpacity></View>
+                  
+                  {/* Nova Linha de Ações nas Metas */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 15 }}>
+                    <View style={{ flexDirection: 'row' }}>
+                      <TouchableOpacity onPress={() => alternarFixarMeta(meta.id)} style={{ paddingRight: 15 }}>
+                        <Feather name="pin" size={16} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => abrirEdicaoMeta(meta)} style={{ paddingRight: 15 }}>
+                        <Feather name="edit-2" size={16} color="#3B82F6" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => excluirMeta(meta.id)}>
+                        <Feather name="trash-2" size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity style={styles.btnDepositarMeta} onPress={() => abrirDepositarMeta(meta)}>
+                      <Text style={styles.btnDepositarMetaTexto}>Guardar Dinheiro</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </Swipeable>
             </View>
           ); 
         })}
@@ -513,9 +557,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
-      {/* O STATUSBAR CORRIGE A COR DAS LETRAS DO IPHONE NO TOPO */}
       <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor={isDarkMode ? '#1E293B' : '#FFFFFF'} />
-      
       <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => setMenuAberto(true)} style={styles.topBarIcon}><Feather name="menu" size={28} color={iconColor} /></TouchableOpacity>
@@ -545,190 +587,4 @@ export default function App() {
         <Modal animationType="slide" transparent={true} visible={modalEditarPerfilVisivel} onRequestClose={() => setModalEditarPerfilVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Editar Perfil</Text><TouchableOpacity onPress={() => setModalEditarPerfilVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><Text style={styles.label}>Nome ou Apelido</Text><TextInput style={styles.input} placeholder="Seu nome" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={perfilNome} onChangeText={setPerfilNome} /><Text style={styles.label}>E-mail</Text><TextInput style={styles.input} placeholder="Seu e-mail" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="email-address" autoCapitalize="none" value={perfilEmail} onChangeText={setPerfilEmail} /><TouchableOpacity style={styles.botaoSalvar} onPress={salvarEdicaoPerfil}><Text style={styles.textoBotaoSalvar}>Salvar Alterações</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
         <Modal animationType="slide" transparent={true} visible={modalSegurancaVisivel} onRequestClose={() => setModalSegurancaVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Segurança</Text><TouchableOpacity onPress={() => setModalSegurancaVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><View style={styles.biometriaRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><Feather name="smartphone" size={24} color={iconColor} style={{marginRight: 10}} /><Text style={styles.labelBiometria}>Biometria / Face ID</Text></View><Switch trackColor={{ false: "#CBD5E1", true: "#3B82F6" }} thumbColor="#FFFFFF" onValueChange={() => setBiometriaAtiva(!biometriaAtiva)} value={biometriaAtiva} /></View><Text style={styles.dicaBiometria}>Use sua digital ou rosto para entrar no app sem precisar digitar a senha toda vez.</Text><Text style={[styles.sectionTitle, {marginTop: 20}]}>Trocar Senha</Text><Text style={styles.labelPequeno}>Senha Atual</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} /><Text style={styles.labelPequeno}>Nova Senha</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} /><TouchableOpacity style={styles.botaoSalvar} onPress={() => { Platform.OS === 'web' ? window.alert('Senha atualizada com segurança!') : Alert.alert('Segurança', 'Senha atualizada com segurança!'); setModalSegurancaVisivel(false); }}><Text style={styles.textoBotaoSalvar}>Atualizar Senha</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
         <Modal animationType="slide" transparent={true} visible={modalCategoriasVisivel} onRequestClose={() => setModalCategoriasVisivel(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}><View style={styles.modalConteudo}><View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Gerenciar Categorias</Text><TouchableOpacity onPress={() => setModalCategoriasVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View><Text style={styles.labelPequeno}>Nova Categoria:</Text><View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}><TextInput style={[styles.input, {flex: 1, marginRight: 10, paddingVertical: 10}]} placeholder="Ex: Faculdade" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaCategoriaNome} onChangeText={setNovaCategoriaNome} /><TouchableOpacity style={styles.btnAdicionarCategoria} onPress={adicionarCategoria}><Feather name="plus" size={20} color="#FFF" /></TouchableOpacity></View><Text style={styles.labelPequeno}>Escolha a Cor:</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>{coresDisponiveis.map(cor => (<TouchableOpacity key={cor} style={[styles.bolinhaCor, {backgroundColor: cor}, novaCategoriaCor === cor && styles.bolinhaCorAtiva]} onPress={() => setNovaCategoriaCor(cor)} />))}</ScrollView><Text style={styles.labelPequeno}>Suas Categorias:</Text><FlatList data={categorias} keyExtractor={item => item.id} style={{maxHeight: 300}} renderItem={({item}) => (<View style={styles.catEditRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 12, height: 12, borderRadius: 6, backgroundColor: item.cor, marginRight: 10}} /><Text style={styles.catEditNome}>{item.nome}</Text></View><TouchableOpacity onPress={() => excluirCategoria(item.id, item.nome)} style={{padding: 5}}><Feather name="trash-2" size={20} color="#EF4444" /></TouchableOpacity></View>)} /></View></KeyboardAvoidingView></Modal>
-        <Modal visible={menuAberto} transparent={true} animationType="fade" onRequestClose={() => setMenuAberto(false)}><View style={styles.drawerOverlay}><View style={styles.drawerContent}><View style={styles.drawerHeader}><View style={styles.avatarPlaceholder}><Feather name="user" size={32} color="#FFF" /></View><Text style={styles.drawerName}>App Finanças</Text><Text style={styles.drawerSubtitle}>Gestão Inteligente</Text></View><ScrollView><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setAbaAtual('visao_anual'), 200); }}><Feather name="bar-chart-2" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Visão Anual</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setModalCategoriasVisivel(true), 200); }}><Feather name="tag" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Gerenciar Categorias</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="download" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Exportar Relatórios</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="settings" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Configurações</Text></TouchableOpacity></ScrollView></View><TouchableOpacity style={styles.drawerCloseArea} activeOpacity={1} onPress={() => setMenuAberto(false)} /></View></Modal>
-      </SafeAreaView>
-    </GestureHandlerRootView>
-  );
-}
-
-const dynamicStyles = (isDark) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
-  scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 12 : 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
-  topBarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
-  topBarIcon: { padding: 5 },
-  notificationBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: isDark ? '#1E293B' : '#FFFFFF' },
-  metaTagsRow: { flexDirection: 'row', marginBottom: 12, flexWrap: 'wrap' },
-  metaTag: { backgroundColor: isDark ? '#334155' : '#F1F5F9', color: isDark ? '#CBD5E1' : '#64748B', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
-  metaTagCalendario: { backgroundColor: isDark ? '#7F1D1D' : '#FEF2F2', color: isDark ? '#FCA5A5' : '#EF4444', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
-  metaTagPagamento: { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', color: isDark ? '#93C5FD' : '#3B82F6', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
-  metaCardWrapper: { marginBottom: 15, marginHorizontal: 20, borderRadius: 16, backgroundColor: 'transparent' },
-  metaCard: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  avisoFixaContainer: { marginTop: 10, marginBottom: 15, backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', padding: 15, borderRadius: 12, alignItems: 'center' },
-  avisoFixaTexto: { color: isDark ? '#93C5FD' : '#3B82F6', fontSize: 13, fontWeight: '600' },
-  grupoContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, marginBottom: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, overflow: 'hidden' },
-  grupoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
-  grupoTitulo: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B', marginLeft: 10 },
-  grupoQtd: { fontSize: 14, color: isDark ? '#64748B' : '#94A3B8', marginLeft: 6 },
-  grupoTotal: { fontSize: 16, fontWeight: 'bold' },
-  grupoConteudo: { backgroundColor: isDark ? '#0F172A' : '#FAFAFA', borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', padding: 10 },
-  cardContainerGrouped: { marginBottom: 8 },
-  listCardGrouped: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 15, borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2, elevation: 1 },
-  calendarioOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
-  metasHeader: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, marginHorizontal: 20, marginTop: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  metasHeaderLabel: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '600' },
-  metasHeaderValor: { fontSize: 32, fontWeight: 'bold', color: '#10B981', marginVertical: 5 },
-  btnNovaMeta: { backgroundColor: '#3B82F6', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
-  btnNovaMetaTexto: { color: '#FFF', fontWeight: 'bold', marginLeft: 8 },
-  metaCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  metaCardTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
-  metaCardPercent: { fontSize: 16, fontWeight: 'bold' },
-  metaValores: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  metaValorAtual: { fontSize: 14, color: '#10B981', fontWeight: 'bold' },
-  metaValorAlvo: { fontSize: 14, color: isDark ? '#64748B' : '#64748B' },
-  metaBarraFundo: { width: '100%', height: 10, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 5, overflow: 'hidden', marginBottom: 15 },
-  metaBarraProgresso: { height: '100%', borderRadius: 5 },
-  metaAcoes: { flexDirection: 'row', justifyContent: 'flex-end' },
-  btnDepositarMeta: { backgroundColor: isDark ? '#334155' : '#EFF6FF', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
-  btnDepositarMetaTexto: { color: isDark ? '#93C5FD' : '#3B82F6', fontWeight: 'bold', fontSize: 13 },
-  graficoAnualContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, marginHorizontal: 20, paddingVertical: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  graficoMesColuna: { alignItems: 'center', marginHorizontal: 12 },
-  graficoBarrasContainer: { flexDirection: 'row', alignItems: 'flex-end', height: 150, marginBottom: 10 },
-  graficoBarra: { width: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4, marginHorizontal: 2 },
-  bgVerde: { backgroundColor: '#10B981' },
-  bgVermelho: { backgroundColor: '#EF4444' },
-  graficoMesLabel: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' },
-  graficoLegenda: { flexDirection: 'row', justifyContent: 'center', marginTop: 15 },
-  biometriaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? '#334155' : '#F1F5F9', padding: 15, borderRadius: 12, marginTop: 10 },
-  labelBiometria: { fontSize: 16, fontWeight: '600', color: isDark ? '#F8FAFC' : '#1E293B' },
-  dicaBiometria: { fontSize: 12, color: isDark ? '#94A3B8' : '#94A3B8', marginTop: 8, marginBottom: 15, paddingHorizontal: 5 },
-  perfilHeader: { alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 40, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
-  perfilAvatarGiga: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
-  perfilNomeGiga: { fontSize: 24, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
-  perfilEmailGiga: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 },
-  perfilSectionContainer: { paddingHorizontal: 20, marginTop: 25 },
-  perfilSectionTitle: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#64748B' : '#94A3B8', marginBottom: 15, textTransform: 'uppercase', letterSpacing: 1 },
-  perfilOpcaoBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  perfilOpcaoLeft: { flexDirection: 'row', alignItems: 'center' },
-  perfilIconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  perfilOpcaoTexto: { fontSize: 16, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
-  perfilTagFree: { fontSize: 12, backgroundColor: isDark ? '#334155' : '#F1F5F9', color: isDark ? '#94A3B8' : '#64748B', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, fontWeight: 'bold' },
-  btnSair: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 40, marginBottom: 20, marginHorizontal: 20, paddingVertical: 15, backgroundColor: isDark ? '#7F1D1D' : '#FEF2F2', borderRadius: 16 },
-  btnSairTexto: { marginLeft: 10, fontSize: 16, color: isDark ? '#FCA5A5' : '#EF4444', fontWeight: 'bold' },
-  btnAdicionarCategoria: { backgroundColor: '#3B82F6', width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  bolinhaCor: { width: 34, height: 34, borderRadius: 17, marginHorizontal: 6, borderWidth: 3, borderColor: 'transparent' },
-  bolinhaCorAtiva: { borderColor: isDark ? '#F8FAFC' : '#1E293B', transform: [{ scale: 1.1 }] },
-  catEditRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
-  catEditNome: { fontSize: 16, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
-  categoriasSection: { paddingHorizontal: 20, paddingBottom: 20, marginTop: 10 },
-  categoriasListContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  catRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
-  catLeft: { flexDirection: 'row', alignItems: 'center' },
-  catBolinha: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
-  catNome: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
-  catRight: { alignItems: 'flex-end' },
-  catValor: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
-  catPercent: { fontSize: 11, color: isDark ? '#64748B' : '#64748B', marginTop: 2 },
-  gridMeses: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%', marginTop: 15 },
-  mesItem: { width: '30%', paddingVertical: 12, alignItems: 'center', borderRadius: 10, marginBottom: 10, backgroundColor: isDark ? '#334155' : '#F1F5F9' },
-  mesItemAtivo: { backgroundColor: '#3B82F6' },
-  mesItemTexto: { fontSize: 14, color: isDark ? '#CBD5E1' : '#1E293B', fontWeight: '600' },
-  mesItemTextoAtivo: { color: '#FFF', fontWeight: 'bold' },
-  modalAdicionarOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'flex-end' },
-  menuAdicionarContent: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 30, paddingBottom: Platform.OS === 'ios' ? 50 : 30, alignItems: 'center' },
-  menuAdicionarHeader: { marginBottom: 25 },
-  menuAdicionarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
-  menuAdicionarBotoes: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
-  menuAdicionarOpcao: { alignItems: 'center', flex: 1 },
-  iconBoxAdicionar: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  menuAdicionarTexto: { fontSize: 15, fontWeight: '600', color: isDark ? '#CBD5E1' : '#334155' },
-  drawerOverlay: { flex: 1, flexDirection: 'row' },
-  drawerContent: { width: '75%', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 5, height: 0 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10, zIndex: 2 },
-  drawerCloseArea: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)' },
-  drawerHeader: { backgroundColor: isDark ? '#0F172A' : '#1E293B', paddingTop: 60, paddingBottom: 30, alignItems: 'center', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-  avatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 3, borderColor: isDark ? '#1E293B' : '#FAFAFA' },
-  drawerName: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
-  drawerSubtitle: { color: '#94A3B8', fontSize: 13, marginTop: 4 },
-  drawerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 25, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
-  drawerItemText: { marginLeft: 15, fontSize: 16, color: isDark ? '#CBD5E1' : '#334155', fontWeight: '500' },
-  monthSelectorContainer: { paddingHorizontal: 20, marginTop: 20, marginBottom: 15, alignItems: 'flex-start' },
-  monthPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
-  monthPillText: { fontSize: 14, fontWeight: '600', color: isDark ? '#F8FAFC' : '#1E293B' },
-  cardsContainer: { paddingHorizontal: 20, gap: 12, marginBottom: 25 },
-  summaryCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderRadius: 16 },
-  summaryLabel: { fontSize: 13, fontWeight: '600', marginBottom: 5 },
-  summaryValue: { fontSize: 22, fontWeight: 'bold' },
-  visaoGeralSection: { paddingHorizontal: 20, marginBottom: 25 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B', marginBottom: 15 },
-  chartSection: { paddingHorizontal: 20, paddingBottom: 10 },
-  chartBox: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  chartLabel: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', marginBottom: 15, textAlign: 'center' },
-  barraFundo: { width: '100%', height: 16, backgroundColor: '#10B981', borderRadius: 8, overflow: 'hidden' },
-  barraProgresso: { height: '100%', backgroundColor: '#EF4444', borderRadius: 8 },
-  extratoContainer: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
-  extratoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginTop: 20, marginBottom: 10 },
-  extratoTitle: { fontSize: 22, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
-  extratoSubtitle: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 },
-  btnExportar: { flexDirection: 'row', backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  btnExportarText: { color: '#FFF', fontWeight: 'bold', marginLeft: 6, fontSize: 13 },
-  extratoMonthSelector: { alignItems: 'center', marginVertical: 10 },
-  extratoResumoBoxes: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginBottom: 20 },
-  extratoResumoItem: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFF', padding: 15, borderRadius: 12, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  extratoResumoLabel: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', marginBottom: 4 },
-  extratoResumoValor: { fontSize: 16, fontWeight: 'bold' },
-  textoVazio: { textAlign: 'center', color: isDark ? '#64748B' : '#94A3B8', marginTop: 30, fontSize: 15 },
-  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', position: 'absolute', bottom: 0, width: '100%', zIndex: 10 },
-  navItem: { alignItems: 'center', flex: 1 },
-  navText: { fontSize: 10, color: isDark ? '#64748B' : '#94A3B8', marginTop: 4, fontWeight: '500' },
-  navTextAtivo: { color: '#3B82F6', fontWeight: 'bold' },
-  fabWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  fabBtn: { backgroundColor: '#3B82F6', width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 30, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
-  cardFixado: { borderLeftWidth: 4, borderLeftColor: '#3B82F6' },
-  listCardInfo: { flex: 1 },
-  listCardTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F8FAFC' : '#0F172A' },
-  listCardCategory: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 },
-  listCardValue: { fontSize: 16, fontWeight: 'bold' },
-  dataVencimentoText: { fontSize: 11, color: isDark ? '#64748B' : '#94A3B8', marginTop: 4 },
-  verde: { color: isDark ? '#34D399' : '#15803D' },
-  vermelho: { color: isDark ? '#F87171' : '#B91C1C' },
-  swipeable: { borderRadius: 12, overflow: 'hidden' },
-  rightActions: { flexDirection: 'row' },
-  leftActions: { flexDirection: 'row' },
-  btnEditar: { backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'center', width: 75, height: '100%' },
-  btnExcluir: { backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', width: 75, height: '100%' },
-  btnFixar: { backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', width: 100, height: '100%' },
-  textoAcao: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
-  modalFundo: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'flex-end' },
-  modalConteudo: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '92%' },
-  modalCabecalho: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  modalTitulo: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
-  modalFechar: { fontSize: 20, color: isDark ? '#94A3B8' : '#64748B', fontWeight: 'bold', padding: 10 },
-  label: { fontSize: 14, fontWeight: '600', color: isDark ? '#CBD5E1' : '#475569', marginBottom: 6, marginTop: 12 },
-  labelPequeno: { fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B', marginBottom: 6 },
-  input: { backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 12, padding: 14, fontSize: 15, color: isDark ? '#F8FAFC' : '#1E293B' },
-  linhaDupla: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  metadeInput: { width: '48%' },
-  linhaBotoesOpcao: { flexDirection: 'row', justifyContent: 'space-between' },
-  opcaoBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 10, marginHorizontal: 3 },
-  opcaoBtnAtivo: { backgroundColor: '#3B82F6' },
-  textoOpcao: { fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' },
-  calculoParcelaTexto: { color: isDark ? '#60A5FA' : '#3B82F6', fontSize: 13, fontWeight: '600', marginTop: 6 },
-  listaCategorias: { flexDirection: 'row', marginBottom: 5 },
-  pillCategoria: { backgroundColor: isDark ? '#334155' : '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
-  pillCategoriaAtiva: { backgroundColor: '#3B82F6' },
-  textoPill: { fontSize: 13, fontWeight: '500', color: isDark ? '#CBD5E1' : '#64748B' },
-  inputDataBtn: { backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 12, padding: 14, alignItems: 'center' },
-  inputDataTexto: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
-  botaoSalvar: { backgroundColor: '#3B82F6', paddingVertical: 15, borderRadius: 15, alignItems: 'center', marginTop: 25, marginBottom: 20 },
-  textoBotaoSalvar: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  modalFundoCentro: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center' },
-  calendarioBox: { width: '85%', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 20, alignItems: 'center' },
-  calTopo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10 },
-  calSeta: { fontSize: 22, fontWeight: 'bold', color: '#3B82F6', paddingHorizontal: 10 },
-  calTitulo: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
-  gridDias: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', width: '100%' },
-  diaItem: { width: '14.2%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 2 },
-  diaTexto: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
-  btnFecharCal: { marginTop: 15, paddingVertical: 8, paddingHorizontal: 20, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 10 },
-  textoFecharCal: { color: isDark ? '#CBD5E1' : '#64748B', fontWeight: 'bold', fontSize: 13 }
-});
+        <Modal visible={menuAberto} transparent={true} animationType="fade" onRequestClose={() => setMenuAberto(false)}><View style={styles.drawerOverlay}><View style={styles.drawerContent}><View style={styles.drawerHeader}><View style={styles.avatarPlaceholder}><Feather name="user" size={32} color="#FFF" /></View><Text style={styles.drawerName}>App Finanças</Text><Text style={styles.drawerSubtitle}>Gestão Inteligente</Text></View><ScrollView><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setAbaAtual('visao_anual'), 200); }}><Feather name="bar-chart-2" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Visão Anual</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem} onPress={() => { setMenuAberto(false); setTimeout(() => setModalCategoriasVisivel(true), 200); }}><Feather name="tag" size={22} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={styles.drawerItemText}>Gerenciar Categorias</Text></TouchableOpacity><TouchableOpacity style={styles.drawerItem}><Feather name="download" size={22} color={is
