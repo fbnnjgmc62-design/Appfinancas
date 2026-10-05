@@ -355,8 +355,7 @@ export default function App() {
         </View>
       </ScrollView>
     );
-  };
-const renderPerfil = () => (
+  };const renderPerfil = () => (
     <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.perfilHeader}>
         <View style={styles.perfilAvatarGiga}><Feather name="user" size={45} color="#FFF" /></View>
