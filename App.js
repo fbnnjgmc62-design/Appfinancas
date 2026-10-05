@@ -43,6 +43,7 @@ export default function App() {
       setSession(session);
       if (session?.user) {
         setPerfilEmail(session.user.email || '');
+        carregarDadosNuvem(session.user.id);
       }
       setLoadingSession(false);
     });
@@ -51,29 +52,28 @@ export default function App() {
       setSession(session);
       if (session?.user) {
         setPerfilEmail(session.user.email || '');
+        carregarDadosNuvem(session.user.id);
       }
     });
 
-    carregarDados();
+    carregarConfiguracoesLocais();
 
     return () => {
       authListener?.subscription?.unsubscribe();
     };
   }, []);
 
-  const carregarDados = async () => {
+  const carregarConfiguracoesLocais = async () => {
     try {
-      const transacoesSalvas = await AsyncStorage.getItem('@transacoes');
+      const temaSalvo = await AsyncStorage.getItem('@temaEscuro');
+      const nomeSalvo = await AsyncStorage.getItem('@perfilNome');
       const categoriasSalvas = await AsyncStorage.getItem('@categorias');
       const metasSalvas = await AsyncStorage.getItem('@metas');
-      const nomeSalvo = await AsyncStorage.getItem('@perfilNome');
-      const temaSalvo = await AsyncStorage.getItem('@temaEscuro');
 
       if (temaSalvo !== null) setIsDarkMode(JSON.parse(temaSalvo));
-      if (transacoesSalvas) setTransacoes(JSON.parse(transacoesSalvas));
       if (nomeSalvo) setPerfilNome(nomeSalvo);
       if (metasSalvas) setMetas(JSON.parse(metasSalvas));
-      
+
       if (categoriasSalvas) {
         setCategorias(JSON.parse(categoriasSalvas));
       } else {
@@ -85,10 +85,39 @@ export default function App() {
           { id: '9', nome: 'Renda', cor: '#10B981' }, { id: '10', nome: 'Outros', cor: '#64748B' }
         ];
         setCategorias(categoriasPadrao);
-        AsyncStorage.setItem('@categorias', JSON.stringify(categoriasPadrao));
       }
     } catch (e) {
-      console.log('Erro ao carregar dados', e);
+      console.log('Erro ao carregar configurações locais', e);
+    }
+  };
+
+  const carregarDadosNuvem = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('transacoes')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.log('Erro ao buscar transações do Supabase:', error.message);
+      } else if (data) {
+        // Mapear colunas do banco para o formato do app
+        const transacoesFormatadas = data.map(t => ({
+          id: t.id,
+          descricao: t.descricao,
+          valor: Number(t.valor),
+          tipo: t.tipo,
+          categoria: t.categoria,
+          modalidade: t.modalidade,
+          dataCompra: t.data_compra,
+          dataVencimento: t.data_vencimento,
+          fixado: t.fixado
+        }));
+        setTransacoes(transacoesFormatadas);
+      }
+    } catch (e) {
+      console.log('Erro de conexão com a nuvem', e);
     }
   };
 
@@ -102,12 +131,29 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setTransacoes([]);
+  };
+
+  const salvarTransacaoNaNuvem = async (novaTransacaoObj) => {
+    if (!session?.user) return;
+    const { error } = await supabase.from('transacoes').insert([{
+      id: novaTransacaoObj.id,
+      user_id: session.user.id,
+      descricao: novaTransacaoObj.descricao,
+      valor: novaTransacaoObj.valor,
+      tipo: novaTransacaoObj.tipo,
+      categoria: novaTransacaoObj.categoria,
+      modalidade: novaTransacaoObj.modalidade,
+      data_compra: novaTransacaoObj.dataCompra,
+      data_vencimento: novaTransacaoObj.dataVencimento,
+      fixado: novaTransacaoObj.fixado
+    }]);
+
+    if (error) console.log('Erro ao salvar na nuvem:', error.message);
   };
 
   const atualizarTransacoes = async (novasTransacoes) => {
     setTransacoes(novasTransacoes);
-    try { await AsyncStorage.setItem('@transacoes', JSON.stringify(novasTransacoes)); } 
-    catch (e) { console.log('Erro ao salvar transações', e); }
   };
 
   const atualizarCategorias = async (novasCategorias) => {
@@ -168,8 +214,12 @@ export default function App() {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    carregarDados().then(() => setRefreshing(false));
-  }, []);
+    if (session?.user) {
+      carregarDadosNuvem(session.user.id).then(() => setRefreshing(false));
+    } else {
+      setRefreshing(false);
+    }
+  }, [session]);
 
   const styles = dynamicStyles(isDarkMode);
   const iconColor = isDarkMode ? "#F8FAFC" : "#1E293B";
@@ -275,30 +325,97 @@ export default function App() {
     setModalVisivel(true);
   };
 
-  const salvarTransacao = () => {
+  const salvarTransacao = async () => {
     if (!novaDescricao || !novoValor) { Platform.OS === 'web' ? window.alert("Preencha a descrição e o valor.") : Alert.alert("Erro", "Preencha a descrição e o valor."); return; }
     if (novaModalidade !== 'fixa' && !novaDataCompra) { Platform.OS === 'web' ? window.alert("Selecione a data da transação.") : Alert.alert("Erro", "Selecione a data da transação."); return; }
+    
     const valorTotal = parseFloat(novoValor.replace(',', '.'));
-    let dataBaseCompra = novaDataCompra; let vencimentoBase = novoTipo === 'entrada' ? novaDataCompra : (novaDataVencimento || novaDataCompra);
-    if (novoTipo === 'saida' && novaModalidade === 'fixa') { dataBaseCompra = `01/${mesSelecionado}`; vencimentoBase = `01/${mesSelecionado}`; }
-    const somarMesesData = (dataStr, qtdMeses) => { const partes = dataStr.split('/'); let d = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1 + qtdMeses, parseInt(partes[0], 10)); return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`; };
-    let transacoesAtualizadas = [];
-    if (idEditando) { transacoesAtualizadas = transacoes.map(t => t.id === idEditando ? { ...t, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, categoria: novaCategoriaForm, modalidade: novaModalidade, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase } : t ); } 
-    else {
+    let dataBaseCompra = novaDataCompra; 
+    let vencimentoBase = novoTipo === 'entrada' ? novaDataCompra : (novaDataVencimento || novaDataCompra);
+
+    if (novoTipo === 'saida' && novaModalidade === 'fixa') {
+      dataBaseCompra = `01/${mesSelecionado}`;
+      vencimentoBase = `01/${mesSelecionado}`;
+    }
+
+    const somarMesesData = (dataStr, qtdMeses) => { 
+      const partes = dataStr.split('/'); 
+      let d = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1 + qtdMeses, parseInt(partes[0], 10)); 
+      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`; 
+    };
+
+    if (idEditando) {
+      const atualizada = { descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, categoria: novaCategoriaForm, modalidade: novaModalidade, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase };
+      const { error } = await supabase.from('transacoes').update({
+        descricao: novaDescricao,
+        valor: valorTotal,
+        tipo: novoTipo,
+        categoria: novaCategoriaForm,
+        modalidade: novaModalidade,
+        data_compra: dataBaseCompra,
+        data_vencimento: vencimentoBase
+      }).eq('id', idEditando);
+
+      if (!error) {
+        setTransacoes(transacoes.map(t => t.id === idEditando ? { ...t, ...atualizada } : t));
+      }
+    } else {
       if (novoTipo === 'saida' && novaModalidade === 'parcelada') {
-        const nParcelas = Math.max(parseInt(qtdParcelas, 10) || 2, 2); const valorParcela = parseFloat((valorTotal / nParcelas).toFixed(2)); let novas = [];
-        for (let i = 0; i < nParcelas; i++) { novas.push({ id: `${Date.now()}_${i}`, descricao: `${novaDescricao} [${i + 1}/${nParcelas}]`, valor: valorParcela, tipo: 'saida', modalidade: 'parcelada', parcelasInfo: `${i + 1}/${nParcelas}`, categoria: novaCategoriaForm, dataCompra: dataBaseCompra, dataVencimento: somarMesesData(vencimentoBase, i), fixado: false }); }
-        transacoesAtualizadas = [...novas, ...transacoes];
+        const nParcelas = Math.max(parseInt(qtdParcelas, 10) || 2, 2); 
+        const valorParcela = parseFloat((valorTotal / nParcelas).toFixed(2)); 
+        let novas = [];
+        for (let i = 0; i < nParcelas; i++) {
+          const itemNovo = { 
+            id: `${Date.now()}_${i}`, 
+            descricao: `${novaDescricao} [${i + 1}/${nParcelas}]`, 
+            valor: valorParcela, 
+            tipo: 'saida', 
+            modalidade: 'parcelada', 
+            parcelasInfo: `${i + 1}/${nParcelas}`, 
+            categoria: novaCategoriaForm, 
+            dataCompra: dataBaseCompra, 
+            dataVencimento: somarMesesData(vencimentoBase, i), 
+            fixado: false 
+          };
+          novas.push(itemNovo);
+          await salvarTransacaoNaNuvem(itemNovo);
+        }
+        setTransacoes([...novas, ...transacoes]);
       } else if (novoTipo === 'saida' && novaModalidade === 'fixa') {
         let recorrentes = [];
-        for (let i = 0; i < 12; i++) { recorrentes.push({ id: `${Date.now()}_fixa_${i}`, descricao: `${novaDescricao} (Fixa)`, valor: valorTotal, tipo: 'saida', modalidade: 'fixa', categoria: novaCategoriaForm, dataCompra: dataBaseCompra, dataVencimento: somarMesesData(vencimentoBase, i), fixado: false }); }
-        transacoesAtualizadas = [...recorrentes, ...transacoes];
+        for (let i = 0; i < 12; i++) {
+          const itemRecorrente = { 
+            id: `${Date.now()}_fixa_${i}`, 
+            descricao: `${novaDescricao} (Fixa)`, 
+            valor: valorTotal, 
+            tipo: 'saida', 
+            modalidade: 'fixa', 
+            categoria: novaCategoriaForm, 
+            dataCompra: dataBaseCompra, 
+            dataVencimento: somarMesesData(vencimentoBase, i), 
+            fixado: false 
+          };
+          recorrentes.push(itemRecorrente);
+          await salvarTransacaoNaNuvem(itemRecorrente);
+        }
+        setTransacoes([...recorrentes, ...transacoes]);
       } else {
-        const nova = { id: Date.now().toString(), descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, categoria: novaCategoriaForm, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase, fixado: false };
-        transacoesAtualizadas = [nova, ...transacoes];
+        const nova = { 
+          id: Date.now().toString(), 
+          descricao: novaDescricao, 
+          valor: valorTotal, 
+          tipo: novoTipo, 
+          modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, 
+          categoria: novaCategoriaForm, 
+          dataCompra: dataBaseCompra, 
+          dataVencimento: vencimentoBase, 
+          fixado: false 
+        };
+        await salvarTransacaoNaNuvem(nova);
+        setTransacoes([nova, ...transacoes]);
       }
     }
-    atualizarTransacoes(transacoesAtualizadas); fecharModal();
+    fecharModal();
   };
 
   const adicionarCategoria = () => {
@@ -314,13 +431,27 @@ export default function App() {
     else { Alert.alert('Apagar Categoria', `Tem certeza que deseja apagar "${nome}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar', style: 'destructive', onPress: deletar }]); }
   };
 
-  const excluirTransacao = (id) => { 
-    const deletar = () => atualizarTransacoes(transacoes.filter(t => t.id !== id));
+  const excluirTransacao = async (id) => { 
+    const deletar = async () => {
+      const { error } = await supabase.from('transacoes').delete().eq('id', id);
+      if (!error) {
+        setTransacoes(transacoes.filter(t => t.id !== id));
+      }
+    };
     if (Platform.OS === 'web') { if (window.confirm("Deseja apagar este registro?")) deletar(); } 
     else { Alert.alert("Excluir", "Deseja apagar este registro?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
   };
 
-  const alternarFixar = (id) => { atualizarTransacoes(transacoes.map(t => t.id === id ? { ...t, fixado: !t.fixado } : t)); };
+  const alternarFixar = async (id) => { 
+    const itemAlvo = transacoes.find(t => t.id === id);
+    if (!itemAlvo) return;
+    const novoFixado = !itemAlvo.fixado;
+
+    const { error } = await supabase.from('transacoes').update({ fixado: novoFixado }).eq('id', id);
+    if (!error) {
+      setTransacoes(transacoes.map(t => t.id === id ? { ...t, fixado: novoFixado } : t));
+    }
+  };
 
   const mostrarDetalhes = (item) => {
     let msg = `Descrição: ${item.descricao}\nCategoria: ${item.categoria}\nData: ${item.dataCompra}\nValor: R$ ${item.valor.toFixed(2)}`;
@@ -356,13 +487,25 @@ export default function App() {
     fecharModalMeta();
   };
 
-  const depositarNaMeta = () => {
+  const depositarNaMeta = async () => {
     if (!valorDeposito) return; 
     const valorNum = parseFloat(valorDeposito.replace(',', '.'));
     atualizarMetas(metas.map(m => m.id === metaSelecionada.id ? { ...m, valorAtual: m.valorAtual + valorNum } : m));
     if (origemDeposito === 'carteira') {
       const hoje = new Date(); const dataHojeFormatada = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
-      atualizarTransacoes([{ id: Date.now().toString() + '_dep', descricao: `Depósito: ${metaSelecionada.titulo}`, valor: valorNum, tipo: 'saida', modalidade: 'a_vista', categoria: metaSelecionada.categoria || 'Outros', dataCompra: dataHojeFormatada, dataVencimento: dataHojeFormatada, fixado: false }, ...transacoes]);
+      const novaDep = { 
+        id: Date.now().toString() + '_dep', 
+        descricao: `Depósito: ${metaSelecionada.titulo}`, 
+        valor: valorNum, 
+        tipo: 'saida', 
+        modalidade: 'a_vista', 
+        categoria: metaSelecionada.categoria || 'Outros', 
+        dataCompra: dataHojeFormatada, 
+        dataVencimento: dataHojeFormatada, 
+        fixado: false 
+      };
+      await salvarTransacaoNaNuvem(novaDep);
+      setTransacoes([novaDep, ...transacoes]);
     }
     setModalDepositarVisivel(false); setValorDeposito(''); setMetaSelecionada(null); setOrigemDeposito('carteira');
     Platform.OS === 'web' ? window.alert("Dinheiro guardado com sucesso!") : Alert.alert("Sucesso", "Dinheiro guardado com sucesso!");
@@ -556,9 +699,9 @@ export default function App() {
     );
   };
 
-    return (
-    <GestureHandlerRootView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
-      <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => setMenuAberto(true)} style={styles.topBarIcon}><Feather name="menu" size={28} color={iconColor} /></TouchableOpacity>
           <Text style={styles.topBarTitle}>{getTopBarTitle()}</Text>
@@ -593,20 +736,11 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
 const dynamicStyles = (isDark) => StyleSheet.create({
   container: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
   scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
-  topBar: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingTop: Platform.OS === 'ios' ? 12 : 15, 
-    paddingBottom: 15, 
-    backgroundColor: isDark ? '#1E293B' : '#FFFFFF', 
-    borderBottomWidth: 1, 
-    borderBottomColor: isDark ? '#334155' : '#F1F5F9' 
-  },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
   topBarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   topBarIcon: { padding: 5 },
   notificationBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: isDark ? '#1E293B' : '#FFFFFF' },
@@ -691,7 +825,7 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   menuAdicionarHeader: { marginBottom: 25 },
   menuAdicionarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   menuAdicionarBotoes: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
-  menuAdicionarOpcao: { alignItems: 'center', flex: 1 },
+  menuAdicionarOpcao: { items: 'center', flex: 1 },
   iconBoxAdicionar: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   menuAdicionarTexto: { fontSize: 15, fontWeight: '600', color: isDark ? '#CBD5E1' : '#334155' },
   drawerOverlay: { flex: 1, flexDirection: 'row' },
