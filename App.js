@@ -144,7 +144,7 @@ export default function App() {
   const [calAno, setCalAno] = useState(dataHoje.getFullYear());
 
   const nomesMeses = { '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril', '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto', '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro' };
-  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, nome: 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
+  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, node: 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -297,24 +297,24 @@ export default function App() {
   const salvarEdicaoPerfil = async () => { try { await AsyncStorage.setItem('@perfilNome', perfilNome); setModalEditarPerfilVisivel(false); } catch (e) { } };
   const getTopBarTitle = () => { if (abaAtual === 'dashboard') return 'Dashboard'; if (abaAtual === 'extrato') return 'Extrato Agrupado'; if (abaAtual === 'perfil') return 'Meu Perfil'; if (abaAtual === 'visao_anual') return 'Relatórios'; if (abaAtual === 'metas') return 'Minhas Metas'; return 'Dashboard'; };
 
-  if (loadingSession) { return (<View 'center' 'center', alignItems: justifyContent: style="{[styles.container," { }]}><ActivityIndicator color="#3B82F6" size="large"/></View>); }
-  if (!session) { return <Auth onLoginSuccess="{(user)"> setSession({ user })} />; }
+  if (loadingSession) { return (<View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color="#3B82F6" /></View>); }
+  if (!session) { return <Auth onLoginSuccess={(user) => setSession({ user })} />; }
 
   const renderDashboard = () => (
-    <ScrollView onRefresh="{onRefresh}" refreshControl="{<RefreshControl" refreshing="{refreshing}" showsVerticalScrollIndicator="{false}" style="{styles.scrollContent}"/>}>
-      <View style="{styles.monthSelectorContainer}"><TouchableOpacity onPress="{abrirSeletorMes}" style="{styles.monthPill}"><Text style="{styles.monthPillText}">{mesAtualNome} / {anoAtual}</Text><Feather 5 color="{iconColor}" marginLeft: name="chevron-down" size="{16}" style="{{" }}/></TouchableOpacity></View>
-      <View style="{styles.cardsContainer}">
-        <View '#064E3B' '#F0FDF4' : ? backgroundColor: isDarkMode style="{[styles.summaryCard," { }]}><View><Text '#15803D' '#34D399' : ? color: isDarkMode style="{[styles.summaryLabel," { }]}>Receitas</Text><Text '#15803D' '#34D399' : ? color: isDarkMode style="{[styles.summaryValue," { }]}>R$ {receitas.toFixed(2).replace('.', ',')}</Text></View><Feather '#15803D'} '#34D399' : ? color="{isDarkMode" name="arrow-up-circle" size="{28}"/></View>
-        <View '#7F1D1D' '#FEF2F2' : ? backgroundColor: isDarkMode style="{[styles.summaryCard," { }]}><View><Text '#B91C1C' '#F87171' : ? color: isDarkMode style="{[styles.summaryLabel," { }]}>Despesas</Text><Text '#B91C1C' '#F87171' : ? color: isDarkMode style="{[styles.summaryValue," { }]}>R$ {despesas.toFixed(2).replace('.', ',')}</Text></View><Feather '#B91C1C'} '#F87171' : ? color="{isDarkMode" name="arrow-down-circle" size="{28}"/></View>
-        <View '#1E3A8A' '#EFF6FF' : ? backgroundColor: isDarkMode style="{[styles.summaryCard," { }]}><View><Text '#1D4ED8' '#60A5FA' : ? color: isDarkMode style="{[styles.summaryLabel," { }]}>Saldo do Mês</Text><Text '#1D4ED8' '#60A5FA' : ? color: isDarkMode style="{[styles.summaryValue," { }]}>R$ {saldo.toFixed(2).replace('.', ',')}</Text></View><Feather '#1D4ED8'} '#60A5FA' : ? color="{isDarkMode" name="credit-card" size="{28}"/></View>
+    <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+      <View style={styles.monthSelectorContainer}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color={iconColor} style={{ marginLeft: 5 }} /></TouchableOpacity></View>
+      <View style={styles.cardsContainer}>
+        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#064E3B' : '#F0FDF4' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#34D399' : '#15803D' }]}>Receitas</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#34D399' : '#15803D' }]}>R$ {receitas.toFixed(2).replace('.', ',')}</Text></View><Feather name="arrow-up-circle" size={28} color={isDarkMode ? '#34D399' : '#15803D'} /></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#7F1D1D' : '#FEF2F2' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#F87171' : '#B91C1C' }]}>Despesas</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#F87171' : '#B91C1C' }]}>R$ {despesas.toFixed(2).replace('.', ',')}</Text></View><Feather name="arrow-down-circle" size={28} color={isDarkMode ? '#F87171' : '#B91C1C'} /></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]}>Saldo do Mês</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]}>R$ {saldo.toFixed(2).replace('.', ',')}</Text></View><Feather name="credit-card" size={28} color={isDarkMode ? '#60A5FA' : '#1D4ED8'} /></View>
       </View>
-      <View style="{styles.chartSection}"><Text style="{styles.sectionTitle}">Progresso do Orçamento</Text><View style="{styles.chartBox}"><Text style="{styles.chartLabel}">Você comprometeu <Text '#B91C1C'}} '#F87171' 'bold', : ? color: isDarkMode style="{{fontWeight:">{porcentagemLimitada.toFixed(0)}%</Text> das receitas.</Text><View style="{styles.barraFundo}"><View `${porcentagemLimitada}%` style="{[styles.barraProgresso," width: { }]}/></View></View></View>
-      <View style="{styles.categoriasSection}"><Text style="{styles.sectionTitle}">Despesas por Categoria</Text><View style="{styles.categoriasListContainer}">{despesasAgrupadas.length === 0 ? (<Text style="{styles.textoVazio}">Nenhum gasto neste mês.</Text>) : (despesasAgrupadas.map((item, index) => { const catObj = categorias.find(c => c.nome === item.nome); const cor = catObj ? catObj.cor : '#94A3B8'; return (<View key="{index}" style="{styles.catRow}"><View style="{styles.catLeft}"><View backgroundColor: cor style="{[styles.catBolinha," { }]}/><Text style="{styles.catNome}">{item.nome}</Text></View><View style="{styles.catRight}"><Text style="{styles.catValor}">R$ {item.total.toFixed(2)}</Text><Text style="{styles.catPercent}">{item.porcentagem.toFixed(0)}%</Text></View></View>) }))}</View></View>
-      <View 100}} style="{{height:"/> 
+      <View style={styles.chartSection}><Text style={styles.sectionTitle}>Progresso do Orçamento</Text><View style={styles.chartBox}><Text style={styles.chartLabel}>Você comprometeu <Text style={{fontWeight: 'bold', color: isDarkMode ? '#F87171' : '#B91C1C'}}>{porcentagemLimitada.toFixed(0)}%</Text> das receitas.</Text><View style={styles.barraFundo}><View style={[styles.barraProgresso, { width: `${porcentagemLimitada}%` }]} /></View></View></View>
+      <View style={styles.categoriasSection}><Text style={styles.sectionTitle}>Despesas por Categoria</Text><View style={styles.categoriasListContainer}>{despesasAgrupadas.length === 0 ? (<Text style={styles.textoVazio}>Nenhum gasto neste mês.</Text>) : (despesasAgrupadas.map((item, index) => { const catObj = categorias.find(c => c.nome === item.nome); const cor = catObj ? catObj.cor : '#94A3B8'; return (<View key={index} style={styles.catRow}><View style={styles.catLeft}><View style={[styles.catBolinha, { backgroundColor: cor }]} /><Text style={styles.catNome}>{item.nome}</Text></View><View style={styles.catRight}><Text style={styles.catValor}>R$ {item.total.toFixed(2)}</Text><Text style={styles.catPercent}>{item.porcentagem.toFixed(0)}%</Text></View></View>) }))}</View></View>
+      <View style={{height: 100}} /> 
     </ScrollView>
   );
 
-const renderExtrato = () => {
+  const renderExtrato = () => {
     let mapaGrupos = {};
     transacoesOrdenadasDoMes.forEach(t => { if (!mapaGrupos[t.categoria]) { const catObj = categorias.find(c => c.nome === t.categoria); mapaGrupos[t.categoria] = { nome: t.categoria, cor: catObj ? catObj.cor : '#94A3B8', transacoes: [], totalEntrada: 0, totalSaida: 0 }; } mapaGrupos[t.categoria].transacoes.push(t); if (t.tipo === 'entrada') mapaGrupos[t.categoria].totalEntrada += t.valor; else mapaGrupos[t.categoria].totalSaida += t.valor; });
     const gruposArray = Object.values(mapaGrupos).sort((a,b) => (b.totalSaida + b.totalEntrada) - (a.totalSaida + a.totalEntrada));
@@ -375,7 +375,7 @@ const renderExtrato = () => {
       </ScrollView>
     );
   };
-  };const renderPerfil = () => (
+  const renderPerfil = () => (
     <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.perfilHeader}>
         <View style={styles.perfilAvatarGiga}><Feather name="user" size={45} color="#FFF" /></View>
@@ -630,22 +630,17 @@ const renderExtrato = () => {
                     </View>
                   </View>
                 )}
-                
                 <Text style={styles.label}>O que foi?</Text>
                 <TextInput style={styles.input} placeholder={novoTipo === 'entrada' ? "Ex: Salário, Venda..." : "Ex: Mercado, Uber..."} placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaDescricao} onChangeText={setNovaDescricao} />
-                
                 <Text style={styles.label}>Categoria</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>
                   {categorias.map((cat) => (<TouchableOpacity key={cat.id} style={[styles.pillCategoria, novaCategoriaForm === cat.nome && styles.pillCategoriaAtiva]} onPress={() => setNovaCategoriaForm(cat.nome)}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: cat.cor, marginRight: 6}} /><Text style={[styles.textoPill, novaCategoriaForm === cat.nome && styles.textoBranco]}>{cat.nome}</Text></View></TouchableOpacity>))}
                 </ScrollView>
-
                 <View style={styles.linhaDupla}>
                   <View style={novaModalidade === 'parcelada' && novoTipo === 'saida' ? { width: '58%' } : { width: '100%' }}><Text style={styles.label}>{novaModalidade === 'parcelada' && novoTipo === 'saida' ? 'Valor Total (R$)' : 'Valor (R$)'}</Text><TextInput style={styles.input} placeholder="0.00" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novoValor} onChangeText={setNovoValor} /></View>
                   {novaModalidade === 'parcelada' && novoTipo === 'saida' && (<View style={{ width: '38%' }}><Text style={styles.label}>Parcelas</Text><TextInput style={styles.input} placeholder="Ex: 3" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={qtdParcelas} onChangeText={setQtdParcelas} /></View>)}
                 </View>
-
                 {novaModalidade === 'parcelada' && novoTipo === 'saida' && novoValor !== '' && (<Text style={styles.calculoParcelaTexto}>💡 {qtdParcelas || 2}x de R$ {(parseFloat(novoValor.replace(',', '.') || 0) / (parseInt(qtdParcelas, 10) || 2)).toFixed(2)} por mês</Text>)}
-                
                 {novoTipo === 'saida' ? (
                   novaModalidade === 'fixa' ? (
                     <View style={styles.avisoFixaContainer}><Text style={styles.avisoFixaTexto}>💡 A despesa começará automaticamente em {nomesMeses[mesSelecionado.split('/')[0]]}/{mesSelecionado.split('/')[1]}</Text></View>
@@ -658,7 +653,6 @@ const renderExtrato = () => {
                 ) : (
                   <View style={{ width: '100%' }}><Text style={styles.label}>Data do Crédito</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('compra')}><Text style={styles.inputDataTexto}>{novaDataCompra || 'Selecionar 📅'}</Text></TouchableOpacity></View>
                 )}
-                
                 <TouchableOpacity style={styles.botaoSalvar} onPress={salvarTransacao}><Text style={styles.textoBotaoSalvar}>{idEditando ? 'Atualizar Registro' : 'Salvar Transação'}</Text></TouchableOpacity>
               </ScrollView>
             </View>
@@ -716,10 +710,8 @@ const renderExtrato = () => {
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}>
             <View style={styles.modalConteudo}>
               <View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Editar Perfil</Text><TouchableOpacity onPress={() => setModalEditarPerfilVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View>
-              <Text style={styles.label}>Nome ou Apelido</Text>
-              <TextInput style={styles.input} placeholder="Seu nome" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={perfilNome} onChangeText={setPerfilNome} />
-              <Text style={styles.label}>E-mail</Text>
-              <TextInput style={styles.input} placeholder="Seu e-mail" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="email-address" autoCapitalize="none" value={perfilEmail} onChangeText={setPerfilEmail} />
+              <Text style={styles.label}>Nome ou Apelido</Text><TextInput style={styles.input} placeholder="Seu nome" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={perfilNome} onChangeText={setPerfilNome} />
+              <Text style={styles.label}>E-mail</Text><TextInput style={styles.input} placeholder="Seu e-mail" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="email-address" autoCapitalize="none" value={perfilEmail} onChangeText={setPerfilEmail} />
               <TouchableOpacity style={styles.botaoSalvar} onPress={salvarEdicaoPerfil}><Text style={styles.textoBotaoSalvar}>Salvar Alterações</Text></TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
@@ -729,13 +721,9 @@ const renderExtrato = () => {
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalFundo}>
             <View style={styles.modalConteudo}>
               <View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>Segurança</Text><TouchableOpacity onPress={() => setModalSegurancaVisivel(false)}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View>
-              <View style={styles.biometriaRow}>
-                <View style={{flexDirection: 'row', alignItems: 'center'}}><Feather name="smartphone" size={24} color={iconColor} style={{marginRight: 10}} /><Text style={styles.labelBiometria}>Biometria / Face ID</Text></View>
-                <Switch trackColor={{ false: "#CBD5E1", true: "#3B82F6" }} thumbColor="#FFFFFF" onValueChange={() => setBiometriaAtiva(!biometriaAtiva)} value={biometriaAtiva} />
-              </View>
+              <View style={styles.biometriaRow}><View style={{flexDirection: 'row', alignItems: 'center'}}><Feather name="smartphone" size={24} color={iconColor} style={{marginRight: 10}} /><Text style={styles.labelBiometria}>Biometria / Face ID</Text></View><Switch trackColor={{ false: "#CBD5E1", true: "#3B82F6" }} thumbColor="#FFFFFF" onValueChange={() => setBiometriaAtiva(!biometriaAtiva)} value={biometriaAtiva} /></View>
               <Text style={styles.dicaBiometria}>Use sua digital ou rosto para entrar no app sem precisar digitar a senha toda vez.</Text>
-              <Text style={[styles.sectionTitle, {marginTop: 20}]}>Trocar Senha</Text>
-              <Text style={styles.labelPequeno}>Senha Atual</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} />
+              <Text style={[styles.sectionTitle, {marginTop: 20}]}>Trocar Senha</Text><Text style={styles.labelPequeno}>Senha Atual</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} />
               <Text style={styles.labelPequeno}>Nova Senha</Text><TextInput style={[styles.input, {marginBottom: 10}]} placeholder="••••••••" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} secureTextEntry={true} />
               <TouchableOpacity style={styles.botaoSalvar} onPress={() => { Platform.OS === 'web' ? window.alert('Senha atualizada com segurança!') : Alert.alert('Segurança', 'Senha atualizada com segurança!'); setModalSegurancaVisivel(false); }}><Text style={styles.textoBotaoSalvar}>Atualizar Senha</Text></TouchableOpacity>
             </View>
@@ -789,4 +777,174 @@ const renderExtrato = () => {
 const dynamicStyles = (isDark) => StyleSheet.create({
   container: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
   scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 12 : 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  topBarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  topBarIcon: { padding: 5 },
+  notificationBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: isDark ? '#1E293B' : '#FFFFFF' },
+  metaTagsRow: { flexDirection: 'row', marginBottom: 12, flexWrap: 'wrap' },
+  metaTag: { backgroundColor: isDark ? '#334155' : '#F1F5F9', color: isDark ? '#CBD5E1' : '#64748B', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
+  metaTagCalendario: { backgroundColor: isDark ? '#7F1D1D' : '#FEF2F2', color: isDark ? '#FCA5A5' : '#EF4444', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
+  metaTagPagamento: { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', color: isDark ? '#93C5FD' : '#3B82F6', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 6, marginBottom: 4 },
+  metaCardWrapper: { marginBottom: 15, marginHorizontal: 20, borderRadius: 16, backgroundColor: 'transparent' },
+  metaCard: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  avisoFixaContainer: { marginTop: 10, marginBottom: 15, backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', padding: 15, borderRadius: 12, alignItems: 'center' },
+  avisoFixaTexto: { color: isDark ? '#93C5FD' : '#3B82F6', fontSize: 13, fontWeight: '600' },
+  grupoContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, marginBottom: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, overflow: 'hidden' },
+  grupoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
+  grupoTitulo: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B', marginLeft: 10 },
+  grupoQtd: { fontSize: 14, color: isDark ? '#64748B' : '#94A3B8', marginLeft: 6 },
+  grupoTotal: { fontSize: 16, fontWeight: 'bold' },
+  grupoConteudo: { backgroundColor: isDark ? '#0F172A' : '#FAFAFA', borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', padding: 10 },
+  cardContainerGrouped: { marginBottom: 8 },
+  listCardGrouped: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 15, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2, elevation: 1 },
+  calendarioOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
+  metasHeader: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, marginHorizontal: 20, marginTop: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  metasHeaderLabel: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '600' },
+  metasHeaderValor: { fontSize: 32, fontWeight: 'bold', color: '#10B981', marginVertical: 5 },
+  btnNovaMeta: { backgroundColor: '#3B82F6', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, marginTop: 10, flexDirection: 'row', alignItems: 'center' },
+  btnNovaMetaTexto: { color: '#FFF', fontWeight: 'bold', marginLeft: 8 },
+  metaCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  metaCardTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  metaCardPercent: { fontSize: 16, fontWeight: 'bold' },
+  metaValores: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  metaValorAtual: { fontSize: 14, color: '#10B981', fontWeight: 'bold' },
+  metaValorAlvo: { fontSize: 14, color: isDark ? '#64748B' : '#64748B' },
+  metaBarraFundo: { width: '100%', height: 10, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 5, overflow: 'hidden', marginBottom: 15 },
+  metaBarraProgresso: { height: '100%', borderRadius: 5 },
+  metaAcoes: { flexDirection: 'row', justifyContent: 'flex-end' },
+  btnDepositarMeta: { backgroundColor: isDark ? '#334155' : '#EFF6FF', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
+  btnDepositarMetaTexto: { color: isDark ? '#93C5FD' : '#3B82F6', fontWeight: 'bold', fontSize: 13 },
+  graficoAnualContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, marginHorizontal: 20, paddingVertical: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  graficoMesColuna: { alignItems: 'center', marginHorizontal: 12 },
+  graficoBarrasContainer: { flexDirection: 'row', alignItems: 'flex-end', height: 150, marginBottom: 10 },
+  graficoBarra: { width: 12, borderTopLeftRadius: 4, borderTopRightRadius: 4, marginHorizontal: 2 },
+  bgVerde: { backgroundColor: '#10B981' },
+  bgVermelho: { backgroundColor: '#EF4444' },
+  graficoMesLabel: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '500' },
+  graficoLegenda: { flexDirection: 'row', justifyContent: 'center', marginTop: 15 },
+  biometriaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? '#334155' : '#F1F5F9', padding: 15, borderRadius: 12, marginTop: 10 },
+  labelBiometria: { fontSize: 16, fontWeight: '600', color: isDark ? '#F8FAFC' : '#1E293B' },
+  dicaBiometria: { fontSize: 12, color: isDark ? '#94A3B8' : '#94A3B8', marginTop: 8, marginBottom: 15, paddingHorizontal: 5 },
+  perfilHeader: { alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 40, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  perfilAvatarGiga: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
+  perfilNomeGiga: { fontSize: 24, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  perfilEmailGiga: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 },
+  perfilSectionContainer: { paddingHorizontal: 20, marginTop: 25 },
+  perfilSectionTitle: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#64748B' : '#94A3B8', marginBottom: 15, textTransform: 'uppercase', letterSpacing: 1 },
+  perfilOpcaoBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  perfilOpcaoLeft: { flexDirection: 'row', alignItems: 'center' },
+  perfilIconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  perfilOpcaoTexto: { fontSize: 16, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
+  perfilTagFree: { fontSize: 12, backgroundColor: isDark ? '#334155' : '#F1F5F9', color: isDark ? '#94A3B8' : '#64748B', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, fontWeight: 'bold' },
+  btnSair: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 40, marginBottom: 20, marginHorizontal: 20, paddingVertical: 15, backgroundColor: isDark ? '#7F1D1D' : '#FEF2F2', borderRadius: 16 },
+  btnSairTexto: { marginLeft: 10, fontSize: 16, color: isDark ? '#FCA5A5' : '#EF4444', fontWeight: 'bold' },
+  btnAdicionarCategoria: { backgroundColor: '#3B82F6', width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  bolinhaCor: { width: 34, height: 34, borderRadius: 17, marginHorizontal: 6, borderWidth: 3, borderColor: 'transparent' },
+  bolinhaCorAtiva: { borderColor: isDark ? '#F8FAFC' : '#1E293B', transform: [{ scale: 1.1 }] },
+  catEditRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  catEditNome: { fontSize: 16, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
+  categoriasSection: { paddingHorizontal: 20, paddingBottom: 20, marginTop: 10 },
+  categoriasListContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  catRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  catLeft: { flexDirection: 'row', alignItems: 'center' },
+  catBolinha: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
+  catNome: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
+  catRight: { alignItems: 'flex-end' },
+  catValor: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  catPercent: { fontSize: 11, color: isDark ? '#64748B' : '#64748B', marginTop: 2 },
+  gridMeses: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%', marginTop: 15 },
+  mesItem: { width: '30%', paddingVertical: 12, alignItems: 'center', borderRadius: 10, marginBottom: 10, backgroundColor: isDark ? '#334155' : '#F1F5F9' },
+  mesItemAtivo: { backgroundColor: '#3B82F6' },
+  mesItemTexto: { fontSize: 14, color: isDark ? '#CBD5E1' : '#1E293B', fontWeight: '600' },
+  mesItemTextoAtivo: { color: '#FFF', fontWeight: 'bold' },
+  modalAdicionarOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'flex-end' },
+  menuAdicionarContent: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 30, paddingBottom: Platform.OS === 'ios' ? 50 : 30, alignItems: 'center' },
+  menuAdicionarHeader: { marginBottom: 25 },
+  menuAdicionarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  menuAdicionarBotoes: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
+  menuAdicionarOpcao: { alignItems: 'center', flex: 1 },
+  iconBoxAdicionar: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  menuAdicionarTexto: { fontSize: 15, fontWeight: '600', color: isDark ? '#CBD5E1' : '#334155' },
+  drawerOverlay: { flex: 1, flexDirection: 'row' },
+  drawerContent: { width: '75%', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 5, height: 0 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10, zIndex: 2 },
+  drawerCloseArea: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)' },
+  drawerHeader: { backgroundColor: isDark ? '#0F172A' : '#1E293B', paddingTop: 60, paddingBottom: 30, alignItems: 'center', borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  avatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 3, borderColor: isDark ? '#1E293B' : '#FAFAFA' },
+  drawerName: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
+  drawerSubtitle: { color: '#94A3B8', fontSize: 13, marginTop: 4 },
+  drawerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 25, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  drawerItemText: { marginLeft: 15, fontSize: 16, color: isDark ? '#CBD5E1' : '#334155', fontWeight: '500' },
+  monthSelectorContainer: { paddingHorizontal: 20, marginTop: 20, marginBottom: 15, alignItems: 'flex-start' },
+  monthPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  monthPillText: { fontSize: 14, fontWeight: '600', color: isDark ? '#F8FAFC' : '#1E293B' },
+  cardsContainer: { paddingHorizontal: 20, gap: 12, marginBottom: 25 },
+  summaryCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderRadius: 16 },
+  summaryLabel: { fontSize: 13, fontWeight: '600', marginBottom: 5 },
+  summaryValue: { fontSize: 22, fontWeight: 'bold' },
+  visaoGeralSection: { paddingHorizontal: 20, marginBottom: 25 },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B', marginBottom: 15 },
+  chartSection: { paddingHorizontal: 20, paddingBottom: 10 },
+  chartBox: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  chartLabel: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', marginBottom: 15, textAlign: 'center' },
+  barraFundo: { width: '100%', height: 16, backgroundColor: '#10B981', borderRadius: 8, overflow: 'hidden' },
+  barraProgresso: { height: '100%', backgroundColor: '#EF4444', borderRadius: 8 },
+  extratoContainer: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
+  extratoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginTop: 20, marginBottom: 10 },
+  extratoTitle: { fontSize: 22, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  extratoSubtitle: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 },
+  btnExportar: { flexDirection: 'row', backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+  btnExportarText: { color: '#FFF', fontWeight: 'bold', marginLeft: 6, fontSize: 13 },
+  extratoMonthSelector: { alignItems: 'center', marginVertical: 10 },
+  extratoResumoBoxes: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginBottom: 20 },
+  extratoResumoItem: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFF', padding: 15, borderRadius: 12, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  extratoResumoLabel: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', marginBottom: 4 },
+  extratoResumoValor: { fontSize: 16, fontWeight: 'bold' },
+  textoVazio: { textAlign: 'center', color: isDark ? '#64748B' : '#94A3B8', marginTop: 30, fontSize: 15 },
+  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', position: 'absolute', bottom: 0, width: '100%', zIndex: 10 },
+  navItem: { alignItems: 'center', flex: 1 },
+  navText: { fontSize: 10, color: isDark ? '#64748B' : '#94A3B8', marginTop: 4, fontWeight: '500' },
+  navTextAtivo: { color: '#3B82F6', fontWeight: 'bold' },
+  fabWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  fabBtn: { backgroundColor: '#3B82F6', width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 30, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
+  cardFixado: { borderLeftWidth: 4, borderLeftColor: '#3B82F6' },
+  listCardInfo: { flex: 1 },
+  listCardTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F8FAFC' : '#0F172A' },
+  listCardCategory: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 },
+  listCardValue: { fontSize: 16, fontWeight: 'bold' },
+  dataVencimentoText: { fontSize: 11, color: isDark ? '#64748B' : '#94A3B8', marginTop: 4 },
+  verde: { color: isDark ? '#34D399' : '#15803D' },
+  vermelho: { color: isDark ? '#F87171' : '#B91C1C' },
+  modalFundo: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'flex-end' },
+  modalConteudo: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '92%' },
+  modalCabecalho: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  modalTitulo: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  modalFechar: { fontSize: 20, color: isDark ? '#94A3B8' : '#64748B', fontWeight: 'bold', padding: 10 },
+  label: { fontSize: 14, fontWeight: '600', color: isDark ? '#CBD5E1' : '#475569', marginBottom: 6, marginTop: 12 },
+  labelPequeno: { fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B', marginBottom: 6 },
+  input: { backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 12, padding: 14, fontSize: 15, color: isDark ? '#F8FAFC' : '#1E293B' },
+  linhaDupla: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  metadeInput: { width: '48%' },
+  linhaBotoesOpcao: { flexDirection: 'row', justifyContent: 'space-between' },
+  opcaoBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 10, marginHorizontal: 3 },
+  opcaoBtnAtivo: { backgroundColor: '#3B82F6' },
+  textoOpcao: { fontSize: 12, fontWeight: '600', color: isDark ? '#94A3B8' : '#64748B' },
+  calculoParcelaTexto: { color: isDark ? '#60A5FA' : '#3B82F6', fontSize: 13, fontWeight: '600', marginTop: 6 },
+  listaCategorias: { flexDirection: 'row', marginBottom: 5 },
+  pillCategoria: { backgroundColor: isDark ? '#334155' : '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
+  pillCategoriaAtiva: { backgroundColor: '#3B82F6' },
+  textoPill: { fontSize: 13, fontWeight: '500', color: isDark ? '#CBD5E1' : '#64748B' },
+  inputDataBtn: { backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 12, padding: 14, alignItems: 'center' },
+  inputDataTexto: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
+  botaoSalvar: { backgroundColor: '#3B82F6', paddingVertical: 15, borderRadius: 15, alignItems: 'center', marginTop: 25, marginBottom: 20 },
+  textoBotaoSalvar: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  modalFundoCentro: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center' },
+  calendarioBox: { width: '85%', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 20, padding: 20, alignItems: 'center' },
+  calTopo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10 },
+  calSeta: { fontSize: 22, fontWeight: 'bold', color: '#3B82F6', paddingHorizontal: 10 },
+  calTitulo: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
+  gridDias: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', width: '100%' },
+  diaItem: { width: '14.2%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 2 },
+  diaTexto: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
+  btnFecharCal: { marginTop: 15, paddingVertical: 8, paddingHorizontal: 20, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 10 },
+  textoFecharCal: { color: isDark ? '#CBD5E1' : '#64748B', fontWeight: 'bold', fontSize: 13 }
+});
