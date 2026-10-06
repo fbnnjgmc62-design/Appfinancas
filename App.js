@@ -782,7 +782,7 @@ const renderExtrato = () => {
         </Modal>
 
       </SafeAreaView>
-    </const dynamicStyles =>
+    </View>
   );
 }
 
