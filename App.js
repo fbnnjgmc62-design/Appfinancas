@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, Alert, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Switch, RefreshControl, ActivityIndicator } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
@@ -315,39 +314,59 @@ export default function App() {
     </ScrollView>
   );
 
-  const renderExtrato = () => {
+const renderExtrato = () => {
     let mapaGrupos = {};
     transacoesOrdenadasDoMes.forEach(t => { if (!mapaGrupos[t.categoria]) { const catObj = categorias.find(c => c.nome === t.categoria); mapaGrupos[t.categoria] = { nome: t.categoria, cor: catObj ? catObj.cor : '#94A3B8', transacoes: [], totalEntrada: 0, totalSaida: 0 }; } mapaGrupos[t.categoria].transacoes.push(t); if (t.tipo === 'entrada') mapaGrupos[t.categoria].totalEntrada += t.valor; else mapaGrupos[t.categoria].totalSaida += t.valor; });
     const gruposArray = Object.values(mapaGrupos).sort((a,b) => (b.totalSaida + b.totalEntrada) - (a.totalSaida + a.totalEntrada));
     const alternarCategoria = (catNome) => { setCategoriasExpandidas(prev => ({ ...prev, [catNome]: !prev[catNome] })); };
     
+    // NOVO CARD SEM SWIPEABLE - BOTÕES INTEGRADOS NO RODAPÉ DO CARD
     const renderCardTransacao = (item) => (
-      <View key="{item.id}" style="{styles.cardContainerGrouped}">
-        <View && 'column', 'stretch' alignItems: flexDirection: item.fixado style="{[styles.listCardGrouped," styles.cardFixado, { }]}>
-          <TouchableOpacity activeOpacity="{0.8}" onPress="{()"> mostrarDetalhes(item)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style="{styles.listCardInfo}"><View 'center' 'row', alignItems: flexDirection: style="{{" }}>{item.fixado && <Text 5 marginRight: style="{{" }}>📌</Text>}<Text style="{styles.listCardTitle}">{item.descricao}</Text></View><Text style="{styles.dataVencimentoText}">{item.dataCompra}</Text></View>
-            <View 'flex-end' alignItems: style="{{" }}><Text 'entrada' : ? item.tipo="==" style="{[styles.listCardValue," styles.verde styles.vermelho]}>{item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}</Text></View>
+      <View key={item.id} style={styles.cardContainerGrouped}>
+        <View style={[styles.listCardGrouped, item.fixado && styles.cardFixado, { flexDirection: 'column', alignItems: 'stretch' }]}>
+          <TouchableOpacity activeOpacity={0.8} onPress={() => mostrarDetalhes(item)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={styles.listCardInfo}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}
+                <Text style={styles.listCardTitle}>{item.descricao}</Text>
+              </View>
+              <Text style={styles.dataVencimentoText}>{item.dataCompra}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>
+                {item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}
+              </Text>
+            </View>
           </TouchableOpacity>
-          <View '#334155' '#F1F5F9', 'flex-end', 'row', 1, 12 12, : ? borderTopColor: borderTopWidth: flexDirection: isDarkMode justifyContent: marginTop: paddingTop: style="{{" }}>
-            <TouchableOpacity onPress="{()"> alternarFixar(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather '#64748B'} '#94A3B8' : ? color="{isDarkMode" name="pin" size="{14}"/><Text '#64748B', '#94A3B8' '600' 12, 6, : ? color: fontSize: fontWeight: isDarkMode marginLeft: style="{{" }}>Fixar</Text></TouchableOpacity>
-            <TouchableOpacity onPress="{()"> abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather color="#3B82F6" name="edit-2" size="{14}"/><Text "#3B82F6", '600' 12, 6, color: fontSize: fontWeight: marginLeft: style="{{" }}>Editar</Text></TouchableOpacity>
-            <TouchableOpacity onPress="{()"> excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}><Feather color="#EF4444" name="trash-2" size="{14}"/><Text "#EF4444", '600' 12, 6, color: fontSize: fontWeight: marginLeft: style="{{" }}>Apagar</Text></TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 12 }}>
+            <TouchableOpacity onPress={() => alternarFixar(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
+              <Feather name="pin" size={14} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+              <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginLeft: 6, fontWeight: '600' }}>Fixar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
+              <Feather name="edit-2" size={14} color="#3B82F6" />
+              <Text style={{ fontSize: 12, color: "#3B82F6", marginLeft: 6, fontWeight: '600' }}>Editar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Feather name="trash-2" size={14} color="#EF4444" />
+              <Text style={{ fontSize: 12, color: "#EF4444", marginLeft: 6, fontWeight: '600' }}>Apagar</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
     );
 
     return (
-      <ScrollView onRefresh="{onRefresh}" refreshControl="{<RefreshControl" refreshing="{refreshing}" showsVerticalScrollIndicator="{false}" style="{styles.extratoContainer}"/>}>
-        <View style="{styles.extratoHeader}"><View><Text style="{styles.extratoTitle}">Extrato Agrupado</Text><Text style="{styles.extratoSubtitle}">Movimentações organizadas</Text></View><TouchableOpacity onPress="{()" style="{styles.btnExportar}"> Platform.OS === 'web' ? window.alert('Gerando PDF...') : Alert.alert('Exportar Extrato', `Gerando PDF...`)}><Feather color="#FFF" name="file-text" size="{18}"/><Text style="{styles.btnExportarText}">Gerar PDF</Text></TouchableOpacity></View>
-        <View style="{styles.extratoMonthSelector}"><TouchableOpacity onPress="{abrirSeletorMes}" style="{styles.monthPill}"><Text style="{styles.monthPillText}">{mesAtualNome} / {anoAtual}</Text><Feather 5 color="{iconColor}" marginLeft: name="chevron-down" size="{16}" style="{{" }}/></TouchableOpacity></View>
-        <View 10 120, 20, marginTop: paddingBottom: paddingHorizontal: style="{{" }}>
-           {gruposArray.length === 0 ? (<Text style="{styles.textoVazio}">Nenhuma movimentação neste mês.</Text>) : (gruposArray.map(grupo => {
+      <ScrollView style={styles.extratoContainer} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        <View style={styles.extratoHeader}><View><Text style={styles.extratoTitle}>Extrato Agrupado</Text><Text style={styles.extratoSubtitle}>Movimentações organizadas</Text></View><TouchableOpacity style={styles.btnExportar} onPress={() => Platform.OS === 'web' ? window.alert('Gerando PDF...') : Alert.alert('Exportar Extrato', `Gerando PDF...`)}><Feather name="file-text" size={18} color="#FFF" /><Text style={styles.btnExportarText}>Gerar PDF</Text></TouchableOpacity></View>
+        <View style={styles.extratoMonthSelector}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color={iconColor} style={{ marginLeft: 5 }} /></TouchableOpacity></View>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 120, marginTop: 10 }}>
+           {gruposArray.length === 0 ? (<Text style={styles.textoVazio}>Nenhuma movimentação neste mês.</Text>) : (gruposArray.map(grupo => {
                  const isExpandido = categoriasExpandidas[grupo.nome]; const saldoFinalCategoria = grupo.totalEntrada - grupo.totalSaida;
                  return (
-                    <View key="{grupo.nome}" style="{styles.grupoContainer}">
-                       <TouchableOpacity onPress="{()" style="{styles.grupoHeader}"> alternarCategoria(grupo.nome)} activeOpacity={0.8}><View 'center'}} 'row', alignItems: style="{{flexDirection:"><View backgroundColor: grupo.cor style="{[styles.catBolinha," { }]}/><Text style="{styles.grupoTitulo}">{grupo.nome}</Text><Text style="{styles.grupoQtd}">({grupo.transacoes.length})</Text></View><View 'center'}} 'row', alignItems: style="{{flexDirection:"><Text saldoFinalCategoria style="{[styles.grupoTotal,">= 0 ? styles.verde : styles.vermelho]}>R$ {Math.abs(saldoFinalCategoria).toFixed(2)}</Text><Feather "chevron-down"} "chevron-up" '#64748B' '#94A3B8'} 10}} : ? color="{isDarkMode" name="{isExpandido" size="{20}" style="{{marginLeft:"/></View></TouchableOpacity>
-                       {isExpandido && (<View style="{styles.grupoConteudo}">{grupo.transacoes.map(t => renderCardTransacao(t))}</View>)}
+                    <View key={grupo.nome} style={styles.grupoContainer}>
+                       <TouchableOpacity style={styles.grupoHeader} onPress={() => alternarCategoria(grupo.nome)} activeOpacity={0.8}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={[styles.catBolinha, { backgroundColor: grupo.cor }]} /><Text style={styles.grupoTitulo}>{grupo.nome}</Text><Text style={styles.grupoQtd}>({grupo.transacoes.length})</Text></View><View style={{flexDirection: 'row', alignItems: 'center'}}><Text style={[styles.grupoTotal, saldoFinalCategoria >= 0 ? styles.verde : styles.vermelho]}>R$ {Math.abs(saldoFinalCategoria).toFixed(2)}</Text><Feather name={isExpandido ? "chevron-up" : "chevron-down"} size={20} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{marginLeft: 10}} /></View></TouchableOpacity>
+                       {isExpandido && (<View style={styles.grupoConteudo}>{grupo.transacoes.map(t => renderCardTransacao(t))}</View>)}
                     </View>
                  )
               })
@@ -355,6 +374,7 @@ export default function App() {
         </View>
       </ScrollView>
     );
+  };
   };const renderPerfil = () => (
     <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.perfilHeader}>
@@ -496,7 +516,7 @@ export default function App() {
   };
 
   return (
-    <GestureHandlerRootView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
       <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor={isDarkMode ? '#1E293B' : '#FFFFFF'} />
       <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
         
@@ -762,7 +782,7 @@ export default function App() {
         </Modal>
 
       </SafeAreaView>
-    </GestureHandlerRootView>
+    </const dynamicStyles =>
   );
 }
 
