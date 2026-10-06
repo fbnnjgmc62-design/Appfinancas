@@ -144,7 +144,7 @@ export default function App() {
   const [calAno, setCalAno] = useState(dataHoje.getFullYear());
 
   const nomesMeses = { '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril', '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto', '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro' };
-  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, node: 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
+  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, nome: 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -228,11 +228,13 @@ export default function App() {
     setMenuAdicionarVisivel(false); setTimeout(() => { setModalVisivel(true); }, 150);
   };
   const fecharModal = () => { setModalVisivel(false); setIdEditando(null); setNovaDescricao(''); setNovoValor(''); setNovaModalidade('a_vista'); setQtdParcelas('2'); setNovoTipo('saida'); setNovaCategoriaForm('Cartão de Crédito'); setCalendarioVisivel(false); };
+  
   const abrirEdicao = (item) => {
     setIdEditando(item.id); setNovoTipo(item.tipo); setNovaModalidade(item.modalidade || 'a_vista'); setNovaDescricao(item.descricao); setNovaCategoriaForm(item.categoria); setNovoValor(item.valor.toString()); setNovaDataCompra(item.dataCompra); setNovaDataVencimento(item.dataVencimento); setModalVisivel(true);
   };
 
- const salvarTransacao = async () => {
+  // AQUI FOI CORRIGIDO O PROBLEMA DO STALE CLOSURE COM "prev =>"
+  const salvarTransacao = async () => {
     if (!novaDescricao || !novoValor) { Platform.OS === 'web' ? window.alert("Preencha a descrição e o valor.") : Alert.alert("Erro", "Preencha."); return; }
     const valorTotal = parseFloat(novoValor.replace(',', '.'));
     let dataBaseCompra = novaDataCompra; let vencimentoBase = novoTipo === 'entrada' ? novaDataCompra : (novaDataVencimento || novaDataCompra);
@@ -242,10 +244,7 @@ export default function App() {
     if (idEditando) {
       const atualizada = { descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, categoria: novaCategoriaForm, modalidade: novaModalidade, data_compra: dataBaseCompra, data_vencimento: vencimentoBase };
       const { error } = await supabase.from('transacoes').update(atualizada).eq('id', idEditando);
-      if (!error) {
-        // Usa o estado anterior (prev) para garantir que nunca perde dados
-        setTransacoes(prev => prev.map(t => t.id === idEditando ? { ...t, ...atualizada, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase } : t));
-      }
+      if (!error) setTransacoes(prev => prev.map(t => t.id === idEditando ? { ...t, ...atualizada, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase } : t));
     } else {
       let novas = [];
       if (novoTipo === 'saida' && novaModalidade === 'parcelada') {
@@ -257,19 +256,13 @@ export default function App() {
         novas.push({ id: Date.now().toString(), user_id: session.user.id, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: vencimentoBase, fixado: false });
       }
       const { error } = await supabase.from('transacoes').insert(novas);
-      if (!error) { 
-        const form = novas.map(n => ({...n, dataCompra: n.data_compra, dataVencimento: n.data_vencimento})); 
-        setTransacoes(prev => [...form, ...prev]); 
-      }
+      if (!error) { const form = novas.map(n => ({...n, dataCompra: n.data_compra, dataVencimento: n.data_vencimento})); setTransacoes(prev => [...form, ...prev]); }
     }
     fecharModal();
   };
 
   const excluirTransacao = async (id) => { 
-    const deletar = async () => { 
-      const { error } = await supabase.from('transacoes').delete().eq('id', id); 
-      if (!error) setTransacoes(prev => prev.filter(t => t.id !== id)); 
-    };
+    const deletar = async () => { const { error } = await supabase.from('transacoes').delete().eq('id', id); if (!error) setTransacoes(prev => prev.filter(t => t.id !== id)); };
     if (Platform.OS === 'web') { if (window.confirm("Apagar?")) deletar(); } else { Alert.alert("Excluir", "Apagar?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
   };
   
@@ -278,7 +271,7 @@ export default function App() {
       const item = prev.find(t => t.id === id); 
       if (!item) return prev; 
       const novo = !item.fixado;
-      supabase.from('transacoes').update({ fixado: novo }).eq('id', id);
+      supabase.from('transacoes').update({ fixado: novo }).eq('id', id).then();
       return prev.map(t => t.id === id ? { ...t, fixado: novo } : t);
     });
   };
@@ -286,15 +279,18 @@ export default function App() {
   const adicionarCategoria = () => { if (!novaCategoriaNome.trim()) return; atualizarCategorias([{ id: Date.now().toString(), nome: novaCategoriaNome.trim(), cor: novaCategoriaCor }, ...categorias]); setNovaCategoriaNome(''); };
   const excluirCategoria = (id, nome) => { if (nome === 'Renda' || nome === 'Outros') return; const deletar = () => { atualizarCategorias(categorias.filter(c => c.id !== id)); if (novaCategoriaForm === nome) setNovaCategoriaForm('Outros'); }; if (Platform.OS === 'web') { if (window.confirm(`Apagar "${nome}"?`)) deletar(); } else { Alert.alert('Apagar', `Apagar "${nome}"?`, [{ text: 'Cancelar' }, { text: 'Apagar', onPress: deletar }]); } };
   const mostrarDetalhes = (item) => { let msg = `Descrição: ${item.descricao}\nCategoria: ${item.categoria}\nData: ${item.dataCompra}\nValor: R$ ${item.valor.toFixed(2)}`; if (item.modalidade) { const rotulos = { a_vista: 'À Vista', parcelada: 'Parcelada', fixa: 'Fixa' }; msg += `\nTipo: ${rotulos[item.modalidade] || item.modalidade}`; } if (Platform.OS === 'web') window.alert(msg); else Alert.alert("Detalhes", msg); };
+  const fecharModalMeta = () => { setModalNovaMetaVisivel(false); setIdEditandoMeta(null); setNovaMetaTitulo(''); setNovaMetaAlvo(''); setNovaMetaValorAtual(''); setNovaMetaCategoria('Outros'); setNovaMetaModalidade('a_vista'); setNovaMetaMeioPagamento('Pix'); setNovaMetaQtdParcelas('2'); setNovaMetaOrigemConta('Conta Corrente'); setNovaMetaDataAlvo(''); setCalendarioVisivel(false); };
   const abrirEdicaoMeta = (meta) => { setIdEditandoMeta(meta.id); setNovaMetaTitulo(meta.titulo); setNovaMetaAlvo(meta.valorAlvo.toString()); setNovaMetaValorAtual(meta.valorAtual ? meta.valorAtual.toString() : '0'); setNovaMetaCategoria(meta.categoria || 'Outros'); setNovaMetaModalidade(meta.modalidade || 'a_vista'); setNovaMetaMeioPagamento(meta.meioPagamento || 'Pix'); setNovaMetaQtdParcelas(meta.qtdParcelas || '2'); setNovaMetaOrigemConta(meta.origemConta || 'Conta Corrente'); setNovaMetaDataAlvo(meta.dataAlvo || ''); setModalNovaMetaVisivel(true); };
   const excluirMeta = (id) => { const deletar = () => atualizarMetas(metas.filter(m => m.id !== id)); if (Platform.OS === 'web') { if (window.confirm("Apagar meta?")) deletar(); } else { Alert.alert("Excluir", "Apagar meta?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); } };
   const alternarFixarMeta = (id) => { atualizarMetas(metas.map(m => m.id === id ? { ...m, fixado: !m.fixado } : m)); };
+  
   const salvarMeta = () => {
     if (!novaMetaTitulo || !novaMetaAlvo || !novaMetaDataAlvo) return;
     const cat = categorias.find(c => c.nome === novaMetaCategoria); const objMeta = { titulo: novaMetaTitulo, valorAlvo: parseFloat(novaMetaAlvo.replace(',', '.')), categoria: novaMetaCategoria, modalidade: novaMetaModalidade, meioPagamento: novaMetaMeioPagamento, qtdParcelas: novaMetaModalidade === 'parcelada' ? novaMetaQtdParcelas : null, origemConta: novaMetaOrigemConta, dataAlvo: novaMetaDataAlvo, cor: cat ? cat.cor : '#3B82F6' };
     if (idEditandoMeta) { atualizarMetas(metas.map(m => m.id === idEditandoMeta ? { ...m, ...objMeta, valorAtual: parseFloat((novaMetaValorAtual || '0').replace(',', '.')) } : m)); } else { atualizarMetas([{ id: Date.now().toString(), ...objMeta, valorAtual: 0, fixado: false }, ...metas]); }
     fecharModalMeta();
   };
+
   const depositarNaMeta = async () => {
     if (!valorDeposito) return; const valorNum = parseFloat(valorDeposito.replace(',', '.'));
     atualizarMetas(metas.map(m => m.id === metaSelecionada.id ? { ...m, valorAtual: m.valorAtual + valorNum } : m));
@@ -302,93 +298,15 @@ export default function App() {
       const hoje = new Date(); const df = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
       const novaDep = { id: Date.now().toString() + '_dep', user_id: session.user.id, descricao: `Depósito: ${metaSelecionada.titulo}`, valor: valorNum, tipo: 'saida', modalidade: 'a_vista', categoria: metaSelecionada.categoria || 'Outros', data_compra: df, data_vencimento: df, fixado: false };
       const { error } = await supabase.from('transacoes').insert([novaDep]);
-      if (!error) setTransacoes([{...novaDep, dataCompra: df, dataVencimento: df}, ...transacoes]);
+      if (!error) setTransacoes(prev => [{...novaDep, dataCompra: df, dataVencimento: df}, ...prev]);
     }
     setModalDepositarVisivel(false); setValorDeposito(''); setMetaSelecionada(null); setOrigemDeposito('carteira');
   };
+  
   const abrirDepositarMeta = (meta) => { setMetaSelecionada(meta); setOrigemDeposito('carteira'); setModalDepositarVisivel(true); };
   const lerNotificacao = () => { if (temNotificacao) { Platform.OS === 'web' ? window.alert("Tudo atualizado!") : Alert.alert("Sucesso", "Tudo atualizado!"); setTemNotificacao(false); } else { Platform.OS === 'web' ? window.alert("Sem notificações.") : Alert.alert("Notificações", "Sem notificações."); } };
   const salvarEdicaoPerfil = async () => { try { await AsyncStorage.setItem('@perfilNome', perfilNome); setModalEditarPerfilVisivel(false); } catch (e) { } };
-  const getTopBarTitle = () => { if (abaAtual === 'dashboard') return 'Dashboard'; if (abaAtual === 'extrato') return 'Extrato Agrupado'; if (abaAtual === 'perfil') return 'Meu Perfil'; if (abaAtual === 'visao_anual') return 'Relatórios'; if (abaAtual === 'metas') return 'Minhas Metas'; return 'Dashboard'; };
-
-  if (loadingSession) { return (<View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color="#3B82F6" /></View>); }
-  if (!session) { return <Auth onLoginSuccess={(user) => setSession({ user })} />; }
-
-  const renderDashboard = () => (
-    <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <View style={styles.monthSelectorContainer}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color={iconColor} style={{ marginLeft: 5 }} /></TouchableOpacity></View>
-      <View style={styles.cardsContainer}>
-        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#064E3B' : '#F0FDF4' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#34D399' : '#15803D' }]}>Receitas</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#34D399' : '#15803D' }]}>R$ {receitas.toFixed(2).replace('.', ',')}</Text></View><Feather name="arrow-up-circle" size={28} color={isDarkMode ? '#34D399' : '#15803D'} /></View>
-        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#7F1D1D' : '#FEF2F2' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#F87171' : '#B91C1C' }]}>Despesas</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#F87171' : '#B91C1C' }]}>R$ {despesas.toFixed(2).replace('.', ',')}</Text></View><Feather name="arrow-down-circle" size={28} color={isDarkMode ? '#F87171' : '#B91C1C'} /></View>
-        <View style={[styles.summaryCard, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}><View><Text style={[styles.summaryLabel, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]}>Saldo do Mês</Text><Text style={[styles.summaryValue, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]}>R$ {saldo.toFixed(2).replace('.', ',')}</Text></View><Feather name="credit-card" size={28} color={isDarkMode ? '#60A5FA' : '#1D4ED8'} /></View>
-      </View>
-      <View style={styles.chartSection}><Text style={styles.sectionTitle}>Progresso do Orçamento</Text><View style={styles.chartBox}><Text style={styles.chartLabel}>Você comprometeu <Text style={{fontWeight: 'bold', color: isDarkMode ? '#F87171' : '#B91C1C'}}>{porcentagemLimitada.toFixed(0)}%</Text> das receitas.</Text><View style={styles.barraFundo}><View style={[styles.barraProgresso, { width: `${porcentagemLimitada}%` }]} /></View></View></View>
-      <View style={styles.categoriasSection}><Text style={styles.sectionTitle}>Despesas por Categoria</Text><View style={styles.categoriasListContainer}>{despesasAgrupadas.length === 0 ? (<Text style={styles.textoVazio}>Nenhum gasto neste mês.</Text>) : (despesasAgrupadas.map((item, index) => { const catObj = categorias.find(c => c.nome === item.nome); const cor = catObj ? catObj.cor : '#94A3B8'; return (<View key={index} style={styles.catRow}><View style={styles.catLeft}><View style={[styles.catBolinha, { backgroundColor: cor }]} /><Text style={styles.catNome}>{item.nome}</Text></View><View style={styles.catRight}><Text style={styles.catValor}>R$ {item.total.toFixed(2)}</Text><Text style={styles.catPercent}>{item.porcentagem.toFixed(0)}%</Text></View></View>) }))}</View></View>
-      <View style={{height: 100}} /> 
-    </ScrollView>
-  );
-
-  const renderExtrato = () => {
-    let mapaGrupos = {};
-    transacoesOrdenadasDoMes.forEach(t => { if (!mapaGrupos[t.categoria]) { const catObj = categorias.find(c => c.nome === t.categoria); mapaGrupos[t.categoria] = { nome: t.categoria, cor: catObj ? catObj.cor : '#94A3B8', transacoes: [], totalEntrada: 0, totalSaida: 0 }; } mapaGrupos[t.categoria].transacoes.push(t); if (t.tipo === 'entrada') mapaGrupos[t.categoria].totalEntrada += t.valor; else mapaGrupos[t.categoria].totalSaida += t.valor; });
-    const gruposArray = Object.values(mapaGrupos).sort((a,b) => (b.totalSaida + b.totalEntrada) - (a.totalSaida + a.totalEntrada));
-    const alternarCategoria = (catNome) => { setCategoriasExpandidas(prev => ({ ...prev, [catNome]: !prev[catNome] })); };
-    
-    // NOVO CARD SEM SWIPEABLE - BOTÕES INTEGRADOS NO RODAPÉ DO CARD
-    const renderCardTransacao = (item) => (
-      <View key={item.id} style={styles.cardContainerGrouped}>
-        <View style={[styles.listCardGrouped, item.fixado && styles.cardFixado, { flexDirection: 'column', alignItems: 'stretch' }]}>
-          <TouchableOpacity activeOpacity={0.8} onPress={() => mostrarDetalhes(item)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={styles.listCardInfo}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}
-                <Text style={styles.listCardTitle}>{item.descricao}</Text>
-              </View>
-              <Text style={styles.dataVencimentoText}>{item.dataCompra}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>
-                {item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 12 }}>
-            <TouchableOpacity onPress={() => alternarFixar(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
-              <Feather name="pin" size={14} color={isDarkMode ? '#94A3B8' : '#64748B'} />
-              <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginLeft: 6, fontWeight: '600' }}>Fixar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
-              <Feather name="edit-2" size={14} color="#3B82F6" />
-              <Text style={{ fontSize: 12, color: "#3B82F6", marginLeft: 6, fontWeight: '600' }}>Editar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Feather name="trash-2" size={14} color="#EF4444" />
-              <Text style={{ fontSize: 12, color: "#EF4444", marginLeft: 6, fontWeight: '600' }}>Apagar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-
-    return (
-      <ScrollView style={styles.extratoContainer} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View style={styles.extratoHeader}><View><Text style={styles.extratoTitle}>Extrato Agrupado</Text><Text style={styles.extratoSubtitle}>Movimentações organizadas</Text></View><TouchableOpacity style={styles.btnExportar} onPress={() => Platform.OS === 'web' ? window.alert('Gerando PDF...') : Alert.alert('Exportar Extrato', `Gerando PDF...`)}><Feather name="file-text" size={18} color="#FFF" /><Text style={styles.btnExportarText}>Gerar PDF</Text></TouchableOpacity></View>
-        <View style={styles.extratoMonthSelector}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color={iconColor} style={{ marginLeft: 5 }} /></TouchableOpacity></View>
-        <View style={{ paddingHorizontal: 20, paddingBottom: 120, marginTop: 10 }}>
-           {gruposArray.length === 0 ? (<Text style={styles.textoVazio}>Nenhuma movimentação neste mês.</Text>) : (gruposArray.map(grupo => {
-                 const isExpandido = categoriasExpandidas[grupo.nome]; const saldoFinalCategoria = grupo.totalEntrada - grupo.totalSaida;
-                 return (
-                    <View key={grupo.nome} style={styles.grupoContainer}>
-                       <TouchableOpacity style={styles.grupoHeader} onPress={() => alternarCategoria(grupo.nome)} activeOpacity={0.8}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={[styles.catBolinha, { backgroundColor: grupo.cor }]} /><Text style={styles.grupoTitulo}>{grupo.nome}</Text><Text style={styles.grupoQtd}>({grupo.transacoes.length})</Text></View><View style={{flexDirection: 'row', alignItems: 'center'}}><Text style={[styles.grupoTotal, saldoFinalCategoria >= 0 ? styles.verde : styles.vermelho]}>R$ {Math.abs(saldoFinalCategoria).toFixed(2)}</Text><Feather name={isExpandido ? "chevron-up" : "chevron-down"} size={20} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{marginLeft: 10}} /></View></TouchableOpacity>
-                       {isExpandido && (<View style={styles.grupoConteudo}>{grupo.transacoes.map(t => renderCardTransacao(t))}</View>)}
-                    </View>
-                 )
-              })
-           )}
-        </View>
-      </ScrollView>
-    );
-  };
+  const getTopBarTitle = () => { if (abaAtual === 'dashboard') return 'Dashboard'; if (abaAtual === 'extrato') return 'Extrato Agrupado'; if (abaAtual === 'perfil') return 'Meu Perfil'; if (abaAtual === 'visao_anual') return 'Relatórios'; if
   const renderPerfil = () => (
     <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.perfilHeader}>
@@ -560,8 +478,7 @@ export default function App() {
               <View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>{idEditandoMeta ? 'Editar Meta' : 'Planejar Compra'}</Text><TouchableOpacity onPress={fecharModalMeta}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View>
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={styles.label}>O que você quer alcançar/comprar?</Text>
-                <TextInput style={styles.input} placeholder="Ex: Tênis de Corrida, Viagem..." placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaMetaTitulo} onChangeText={setNovaMetaTitulo} />
-                
+                <TextInput style={styles.input} placeholder="Ex: Tênis de Corrida..." placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaMetaTitulo} onChangeText={setNovaMetaTitulo} />
                 <Text style={styles.label}>Categoria do Objetivo</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>
                   {categorias.map((cat) => (
@@ -570,40 +487,23 @@ export default function App() {
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-
                 <View style={styles.linhaDupla}>
-                  <View style={{width: '48%'}}>
-                    <Text style={styles.label}>Como pretende pagar?</Text>
-                    <View style={styles.linhaBotoesOpcao}>
-                      <TouchableOpacity style={[styles.opcaoBtn, novaMetaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaMetaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaMetaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity>
-                      <TouchableOpacity style={[styles.opcaoBtn, novaMetaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaMetaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaMetaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity>
-                    </View>
-                  </View>
-                  <View style={{width: '48%'}}>
-                    <Text style={styles.label}>Data Planejada 📅</Text>
-                    <TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('meta_alvo')}><Text style={styles.inputDataTexto}>{novaMetaDataAlvo || 'Selecione'}</Text></TouchableOpacity>
-                  </View>
+                  <View style={{width: '48%'}}><Text style={styles.label}>Como pretende pagar?</Text><View style={styles.linhaBotoesOpcao}><TouchableOpacity style={[styles.opcaoBtn, novaMetaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaMetaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaMetaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaMetaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaMetaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaMetaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity></View></View>
+                  <View style={{width: '48%'}}><Text style={styles.label}>Data Planejada 📅</Text><TouchableOpacity style={styles.inputDataBtn} onPress={() => abrirCalendario('meta_alvo')}><Text style={styles.inputDataTexto}>{novaMetaDataAlvo || 'Selecione'}</Text></TouchableOpacity></View>
                 </View>
-
-                {novaMetaModalidade === 'parcelada' && (
-                  <View style={{marginTop: 10}}><Text style={styles.label}>Em quantas vezes?</Text><TextInput style={styles.input} placeholder="Ex: 12" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novaMetaQtdParcelas} onChangeText={setNovaMetaQtdParcelas} /></View>
-                )}
-
+                {novaMetaModalidade === 'parcelada' && (<View style={{marginTop: 10}}><Text style={styles.label}>Em quantas vezes?</Text><TextInput style={styles.input} placeholder="Ex: 12" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novaMetaQtdParcelas} onChangeText={setNovaMetaQtdParcelas} /></View>)}
                 <Text style={styles.label}>Origem do Dinheiro (De onde vai sair?)</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>
                   {contasOrigem.map((conta) => (<TouchableOpacity key={conta} style={[styles.pillCategoria, novaMetaOrigemConta === conta && {backgroundColor: '#3B82F6'}]} onPress={() => setNovaMetaOrigemConta(conta)}><Text style={[styles.textoPill, novaMetaOrigemConta === conta && styles.textoBranco]}>{conta}</Text></TouchableOpacity>))}
                 </ScrollView>
-
                 <Text style={styles.label}>Meio de Pagamento</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.listaCategorias}>
                   {meiosPagamento.map((meio) => (<TouchableOpacity key={meio} style={[styles.pillCategoria, novaMetaMeioPagamento === meio && styles.pillCategoriaAtiva]} onPress={() => setNovaMetaMeioPagamento(meio)}><Text style={[styles.textoPill, novaMetaMeioPagamento === meio && styles.textoBranco]}>{meio}</Text></TouchableOpacity>))}
                 </ScrollView>
-
                 <View style={styles.linhaDupla}>
                   <View style={idEditandoMeta ? {width: '48%'} : {width: '100%'}}><Text style={styles.label}>Valor Alvo Total (R$)</Text><TextInput style={styles.input} placeholder="0.00" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novaMetaAlvo} onChangeText={setNovaMetaAlvo} /></View>
                   {idEditandoMeta && (<View style={{width: '48%'}}><Text style={styles.label}>Valor Atual Guardado (R$)</Text><TextInput style={styles.input} placeholder="0.00" placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} keyboardType="numeric" value={novaMetaValorAtual} onChangeText={setNovaMetaValorAtual} /></View>)}
                 </View>
-
                 <TouchableOpacity style={styles.botaoSalvar} onPress={salvarMeta}><Text style={styles.textoBotaoSalvar}>{idEditandoMeta ? 'Atualizar Meta' : 'Criar Meta'}</Text></TouchableOpacity>
                 <View style={{height: 40}} />
               </ScrollView>
@@ -623,7 +523,7 @@ export default function App() {
                 <TouchableOpacity style={[styles.opcaoBtn, origemDeposito === 'carteira' && styles.opcaoBtnAtivo]} onPress={() => setOrigemDeposito('carteira')}><Text style={[styles.textoOpcao, origemDeposito === 'carteira' && styles.textoBranco]}>Da Minha Carteira</Text></TouchableOpacity>
                 <TouchableOpacity style={[styles.opcaoBtn, origemDeposito === 'externo' && styles.opcaoBtnAtivo]} onPress={() => setOrigemDeposito('externo')}><Text style={[styles.textoOpcao, origemDeposito === 'externo' && styles.textoBranco]}>Dinheiro Externo</Text></TouchableOpacity>
               </View>
-              {origemDeposito === 'carteira' && (<Text style={styles.calculoParcelaTexto}>💡 Isso vai gerar uma Despesa automática na conta base ({metaSelecionada?.origemConta || 'Conta Corrente'}) no seu Extrato de hoje.</Text>)}
+              {origemDeposito === 'carteira' && (<Text style={styles.calculoParcelaTexto}>💡 Isso vai gerar uma Despesa automática na conta base.</Text>)}
               <TouchableOpacity style={[styles.botaoSalvar, {marginTop: 15}]} onPress={depositarNaMeta}><Text style={styles.textoBotaoSalvar}>Confirmar Depósito</Text></TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
@@ -635,14 +535,7 @@ export default function App() {
               <View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>{idEditando ? 'Editar' : 'Novo Registro'}</Text><TouchableOpacity onPress={fecharModal}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {novoTipo === 'saida' && ( 
-                  <View style={{ marginTop: 5, marginBottom: 15 }}>
-                    <Text style={styles.labelPequeno}>Forma de Pagamento:</Text>
-                    <View style={styles.linhaBotoesOpcao}>
-                      <TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity>
-                      <TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity>
-                      <TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'fixa' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('fixa')}><Text style={[styles.textoOpcao, novaModalidade === 'fixa' && styles.textoBranco]}>Fixa Mensal</Text></TouchableOpacity>
-                    </View>
-                  </View>
+                  <View style={{ marginTop: 5, marginBottom: 15 }}><Text style={styles.labelPequeno}>Forma de Pagamento:</Text><View style={styles.linhaBotoesOpcao}><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'fixa' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('fixa')}><Text style={[styles.textoOpcao, novaModalidade === 'fixa' && styles.textoBranco]}>Fixa Mensal</Text></TouchableOpacity></View></View>
                 )}
                 <Text style={styles.label}>O que foi?</Text>
                 <TextInput style={styles.input} placeholder={novoTipo === 'entrada' ? "Ex: Salário, Venda..." : "Ex: Mercado, Uber..."} placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaDescricao} onChangeText={setNovaDescricao} />
