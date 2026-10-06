@@ -232,7 +232,7 @@ export default function App() {
     setIdEditando(item.id); setNovoTipo(item.tipo); setNovaModalidade(item.modalidade || 'a_vista'); setNovaDescricao(item.descricao); setNovaCategoriaForm(item.categoria); setNovoValor(item.valor.toString()); setNovaDataCompra(item.dataCompra); setNovaDataVencimento(item.dataVencimento); setModalVisivel(true);
   };
 
-  const salvarTransacao = async () => {
+ const salvarTransacao = async () => {
     if (!novaDescricao || !novoValor) { Platform.OS === 'web' ? window.alert("Preencha a descrição e o valor.") : Alert.alert("Erro", "Preencha."); return; }
     const valorTotal = parseFloat(novoValor.replace(',', '.'));
     let dataBaseCompra = novaDataCompra; let vencimentoBase = novoTipo === 'entrada' ? novaDataCompra : (novaDataVencimento || novaDataCompra);
@@ -242,7 +242,10 @@ export default function App() {
     if (idEditando) {
       const atualizada = { descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, categoria: novaCategoriaForm, modalidade: novaModalidade, data_compra: dataBaseCompra, data_vencimento: vencimentoBase };
       const { error } = await supabase.from('transacoes').update(atualizada).eq('id', idEditando);
-      if (!error) setTransacoes(transacoes.map(t => t.id === idEditando ? { ...t, ...atualizada, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase } : t));
+      if (!error) {
+        // Usa o estado anterior (prev) para garantir que nunca perde dados
+        setTransacoes(prev => prev.map(t => t.id === idEditando ? { ...t, ...atualizada, dataCompra: dataBaseCompra, dataVencimento: vencimentoBase } : t));
+      }
     } else {
       let novas = [];
       if (novoTipo === 'saida' && novaModalidade === 'parcelada') {
@@ -254,24 +257,35 @@ export default function App() {
         novas.push({ id: Date.now().toString(), user_id: session.user.id, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: vencimentoBase, fixado: false });
       }
       const { error } = await supabase.from('transacoes').insert(novas);
-      if (!error) { const form = novas.map(n => ({...n, dataCompra: n.data_compra, dataVencimento: n.data_vencimento})); setTransacoes([...form, ...transacoes]); }
+      if (!error) { 
+        const form = novas.map(n => ({...n, dataCompra: n.data_compra, dataVencimento: n.data_vencimento})); 
+        setTransacoes(prev => [...form, ...prev]); 
+      }
     }
     fecharModal();
   };
 
   const excluirTransacao = async (id) => { 
-    const deletar = async () => { const { error } = await supabase.from('transacoes').delete().eq('id', id); if (!error) setTransacoes(transacoes.filter(t => t.id !== id)); };
+    const deletar = async () => { 
+      const { error } = await supabase.from('transacoes').delete().eq('id', id); 
+      if (!error) setTransacoes(prev => prev.filter(t => t.id !== id)); 
+    };
     if (Platform.OS === 'web') { if (window.confirm("Apagar?")) deletar(); } else { Alert.alert("Excluir", "Apagar?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
   };
+  
   const alternarFixar = async (id) => { 
-    const item = transacoes.find(t => t.id === id); if (!item) return; const novo = !item.fixado;
-    const { error } = await supabase.from('transacoes').update({ fixado: novo }).eq('id', id);
-    if (!error) setTransacoes(transacoes.map(t => t.id === id ? { ...t, fixado: novo } : t));
+    setTransacoes(prev => {
+      const item = prev.find(t => t.id === id); 
+      if (!item) return prev; 
+      const novo = !item.fixado;
+      supabase.from('transacoes').update({ fixado: novo }).eq('id', id);
+      return prev.map(t => t.id === id ? { ...t, fixado: novo } : t);
+    });
   };
+  
   const adicionarCategoria = () => { if (!novaCategoriaNome.trim()) return; atualizarCategorias([{ id: Date.now().toString(), nome: novaCategoriaNome.trim(), cor: novaCategoriaCor }, ...categorias]); setNovaCategoriaNome(''); };
   const excluirCategoria = (id, nome) => { if (nome === 'Renda' || nome === 'Outros') return; const deletar = () => { atualizarCategorias(categorias.filter(c => c.id !== id)); if (novaCategoriaForm === nome) setNovaCategoriaForm('Outros'); }; if (Platform.OS === 'web') { if (window.confirm(`Apagar "${nome}"?`)) deletar(); } else { Alert.alert('Apagar', `Apagar "${nome}"?`, [{ text: 'Cancelar' }, { text: 'Apagar', onPress: deletar }]); } };
-  const mostrarDetalhes = (item) => { let msg = `Descrição: ${item.descricao}\nCategoria: ${item.categoria}\nData: ${item.dataCompra}\nValor: R$ ${item.valor.toFixed(2)}`; if (Platform.OS === 'web') window.alert(msg); else Alert.alert("Detalhes", msg); };
-  const fecharModalMeta = () => { setModalNovaMetaVisivel(false); setIdEditandoMeta(null); setNovaMetaTitulo(''); setNovaMetaAlvo(''); setNovaMetaValorAtual(''); setNovaMetaCategoria('Outros'); setNovaMetaModalidade('a_vista'); setNovaMetaMeioPagamento('Pix'); setNovaMetaQtdParcelas('2'); setNovaMetaOrigemConta('Conta Corrente'); setNovaMetaDataAlvo(''); setCalendarioVisivel(false); };
+  const mostrarDetalhes = (item) => { let msg = `Descrição: ${item.descricao}\nCategoria: ${item.categoria}\nData: ${item.dataCompra}\nValor: R$ ${item.valor.toFixed(2)}`; if (item.modalidade) { const rotulos = { a_vista: 'À Vista', parcelada: 'Parcelada', fixa: 'Fixa' }; msg += `\nTipo: ${rotulos[item.modalidade] || item.modalidade}`; } if (Platform.OS === 'web') window.alert(msg); else Alert.alert("Detalhes", msg); };
   const abrirEdicaoMeta = (meta) => { setIdEditandoMeta(meta.id); setNovaMetaTitulo(meta.titulo); setNovaMetaAlvo(meta.valorAlvo.toString()); setNovaMetaValorAtual(meta.valorAtual ? meta.valorAtual.toString() : '0'); setNovaMetaCategoria(meta.categoria || 'Outros'); setNovaMetaModalidade(meta.modalidade || 'a_vista'); setNovaMetaMeioPagamento(meta.meioPagamento || 'Pix'); setNovaMetaQtdParcelas(meta.qtdParcelas || '2'); setNovaMetaOrigemConta(meta.origemConta || 'Conta Corrente'); setNovaMetaDataAlvo(meta.dataAlvo || ''); setModalNovaMetaVisivel(true); };
   const excluirMeta = (id) => { const deletar = () => atualizarMetas(metas.filter(m => m.id !== id)); if (Platform.OS === 'web') { if (window.confirm("Apagar meta?")) deletar(); } else { Alert.alert("Excluir", "Apagar meta?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); } };
   const alternarFixarMeta = (id) => { atualizarMetas(metas.map(m => m.id === id ? { ...m, fixado: !m.fixado } : m)); };
