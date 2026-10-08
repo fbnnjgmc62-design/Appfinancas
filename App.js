@@ -35,6 +35,9 @@ export default function App() {
   const [categorias, setCategorias] = useState([]);
   const [transacoes, setTransacoes] = useState([]);
 
+  // NOVO: Estado para a função de Reembolso
+  const [gerarReembolso, setGerarReembolso] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -53,7 +56,7 @@ export default function App() {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const corFundo = isDarkMode ? '#0F172A' : '#FAFAFA';
+      const corFundo = isDarkMode ? '#0F172A' : '#F1F5F9';
       document.body.style.backgroundColor = corFundo;
       let metaThemeColor = document.querySelector("meta[name=theme-color]");
       if (!metaThemeColor) {
@@ -227,13 +230,14 @@ export default function App() {
     setNovoTipo(tipo); setNovaCategoriaForm(tipo === 'entrada' ? 'Renda' : 'Cartão de Crédito'); setNovaDataCompra(df); setNovaDataVencimento(df); 
     setMenuAdicionarVisivel(false); setTimeout(() => { setModalVisivel(true); }, 150);
   };
-  const fecharModal = () => { setModalVisivel(false); setIdEditando(null); setNovaDescricao(''); setNovoValor(''); setNovaModalidade('a_vista'); setQtdParcelas('2'); setNovoTipo('saida'); setNovaCategoriaForm('Cartão de Crédito'); setCalendarioVisivel(false); };
+  
+  // Limpa também o estado do reembolso
+  const fecharModal = () => { setModalVisivel(false); setIdEditando(null); setNovaDescricao(''); setNovoValor(''); setNovaModalidade('a_vista'); setQtdParcelas('2'); setNovoTipo('saida'); setNovaCategoriaForm('Cartão de Crédito'); setCalendarioVisivel(false); setGerarReembolso(false); };
   
   const abrirEdicao = (item) => {
     setIdEditando(item.id); setNovoTipo(item.tipo); setNovaModalidade(item.modalidade || 'a_vista'); setNovaDescricao(item.descricao); setNovaCategoriaForm(item.categoria); setNovoValor(item.valor.toString()); setNovaDataCompra(item.dataCompra); setNovaDataVencimento(item.dataVencimento); setModalVisivel(true);
   };
 
-  // AQUI FOI CORRIGIDO O PROBLEMA DO STALE CLOSURE COM "prev =>"
   const salvarTransacao = async () => {
     if (!novaDescricao || !novoValor) { Platform.OS === 'web' ? window.alert("Preencha a descrição e o valor.") : Alert.alert("Erro", "Preencha."); return; }
     const valorTotal = parseFloat(novoValor.replace(',', '.'));
@@ -254,6 +258,12 @@ export default function App() {
         for (let i = 0; i < 12; i++) { novas.push({ id: `${Date.now()}_fixa_${i}`, user_id: session.user.id, descricao: `${novaDescricao} (Fixa)`, valor: valorTotal, tipo: 'saida', modalidade: 'fixa', categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: somarMesesData(vencimentoBase, i), fixado: false }); }
       } else {
         novas.push({ id: Date.now().toString(), user_id: session.user.id, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: vencimentoBase, fixado: false });
+        
+        // NOVO: Lógica do Reembolso Futuro
+        if (novoTipo === 'saida' && gerarReembolso) {
+          const dataReem = somarMesesData(vencimentoBase, 1);
+          novas.push({ id: Date.now().toString() + '_reembolso', user_id: session.user.id, descricao: `[Reembolso] ${novaDescricao}`, valor: valorTotal, tipo: 'entrada', modalidade: 'a_vista', categoria: 'Renda', data_compra: dataReem, data_vencimento: dataReem, fixado: false });
+        }
       }
       const { error } = await supabase.from('transacoes').insert(novas);
       if (!error) { const form = novas.map(n => ({...n, dataCompra: n.data_compra, dataVencimento: n.data_vencimento})); setTransacoes(prev => [...form, ...prev]); }
@@ -335,32 +345,13 @@ export default function App() {
       <View key={item.id} style={styles.cardContainerGrouped}>
         <View style={[styles.listCardGrouped, item.fixado && styles.cardFixado, { flexDirection: 'column', alignItems: 'stretch' }]}>
           <TouchableOpacity activeOpacity={0.8} onPress={() => mostrarDetalhes(item)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={styles.listCardInfo}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}
-                <Text style={styles.listCardTitle}>{item.descricao}</Text>
-              </View>
-              <Text style={styles.dataVencimentoText}>{item.dataCompra}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>
-                {item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}
-              </Text>
-            </View>
+            <View style={styles.listCardInfo}><View style={{ flexDirection: 'row', alignItems: 'center' }}>{item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}<Text style={styles.listCardTitle}>{item.descricao}</Text></View><Text style={styles.dataVencimentoText}>{item.dataCompra}</Text></View>
+            <View style={{ alignItems: 'flex-end' }}><Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>{item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}</Text></View>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 12 }}>
-            <TouchableOpacity onPress={() => alternarFixar(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
-              <Feather name="pin" size={14} color={isDarkMode ? '#94A3B8' : '#64748B'} />
-              <Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginLeft: 6, fontWeight: '600' }}>Fixar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
-              <Feather name="edit-2" size={14} color="#3B82F6" />
-              <Text style={{ fontSize: 12, color: "#3B82F6", marginLeft: 6, fontWeight: '600' }}>Editar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Feather name="trash-2" size={14} color="#EF4444" />
-              <Text style={{ fontSize: 12, color: "#EF4444", marginLeft: 6, fontWeight: '600' }}>Apagar</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => alternarFixar(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather name="pin" size={14} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginLeft: 6, fontWeight: '600' }}>Fixar</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather name="edit-2" size={14} color="#3B82F6" /><Text style={{ fontSize: 12, color: "#3B82F6", marginLeft: 6, fontWeight: '600' }}>Editar</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}><Feather name="trash-2" size={14} color="#EF4444" /><Text style={{ fontSize: 12, color: "#EF4444", marginLeft: 6, fontWeight: '600' }}>Apagar</Text></TouchableOpacity>
           </View>
         </View>
       </View>
@@ -508,7 +499,7 @@ export default function App() {
                 <View style={styles.metaBarraFundo}>
                   <View style={[styles.metaBarraProgresso, { width: `${porcentagem}%`, backgroundColor: meta.cor }]} />
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 15 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#E2E8F0', paddingTop: 15 }}>
                   <View style={{ flexDirection: 'row' }}>
                     <TouchableOpacity onPress={() => alternarFixarMeta(meta.id)} style={{ paddingRight: 15 }}><Feather name="pin" size={16} color={isDarkMode ? '#94A3B8' : '#64748B'} /></TouchableOpacity>
                     <TouchableOpacity onPress={() => abrirEdicaoMeta(meta)} style={{ paddingRight: 15 }}><Feather name="edit-2" size={16} color="#3B82F6" /></TouchableOpacity>
@@ -526,9 +517,9 @@ export default function App() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
-      <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor={isDarkMode ? '#1E293B' : '#FFFFFF'} />
-      <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+      <StatusBar style={isDarkMode ? "light" : "dark"} backgroundColor={isDarkMode ? '#1E293B' : '#F1F5F9'} />
+      <SafeAreaView style={[styles.container, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
         
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => setMenuAberto(true)} style={styles.topBarIcon}><Feather name="menu" size={28} color={iconColor} /></TouchableOpacity>
@@ -613,8 +604,29 @@ export default function App() {
               <View style={styles.modalCabecalho}><Text style={styles.modalTitulo}>{idEditando ? 'Editar' : 'Novo Registro'}</Text><TouchableOpacity onPress={fecharModal}><Text style={styles.modalFechar}>X</Text></TouchableOpacity></View>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {novoTipo === 'saida' && ( 
-                  <View style={{ marginTop: 5, marginBottom: 15 }}><Text style={styles.labelPequeno}>Forma de Pagamento:</Text><View style={styles.linhaBotoesOpcao}><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity><TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'fixa' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('fixa')}><Text style={[styles.textoOpcao, novaModalidade === 'fixa' && styles.textoBranco]}>Fixa Mensal</Text></TouchableOpacity></View></View>
+                  <View style={{ marginTop: 5, marginBottom: 15 }}>
+                    <Text style={styles.labelPequeno}>Forma de Pagamento:</Text>
+                    <View style={styles.linhaBotoesOpcao}>
+                      <TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'a_vista' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('a_vista')}><Text style={[styles.textoOpcao, novaModalidade === 'a_vista' && styles.textoBranco]}>À Vista</Text></TouchableOpacity>
+                      <TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'parcelada' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('parcelada')}><Text style={[styles.textoOpcao, novaModalidade === 'parcelada' && styles.textoBranco]}>Parcelado</Text></TouchableOpacity>
+                      <TouchableOpacity style={[styles.opcaoBtn, novaModalidade === 'fixa' && styles.opcaoBtnAtivo]} onPress={() => setNovaModalidade('fixa')}><Text style={[styles.textoOpcao, novaModalidade === 'fixa' && styles.textoBranco]}>Fixa Mensal</Text></TouchableOpacity>
+                    </View>
+                  </View>
                 )}
+                
+                {novoTipo === 'saida' && (
+                  <View style={{ marginBottom: 15, padding: 15, backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderRadius: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                      <Feather name="refresh-ccw" size={20} color={iconColor} style={{marginRight: 10}} />
+                      <View>
+                        <Text style={{fontSize: 14, fontWeight: '600', color: isDarkMode ? '#F8FAFC' : '#1E293B'}}>Gerar Reembolso Futuro</Text>
+                        <Text style={{fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', marginTop: 2}}>Cria uma receita no mês que vem</Text>
+                      </View>
+                    </View>
+                    <Switch trackColor={{ false: "#CBD5E1", true: "#3B82F6" }} thumbColor="#FFFFFF" onValueChange={() => setGerarReembolso(!gerarReembolso)} value={gerarReembolso} />
+                  </View>
+                )}
+
                 <Text style={styles.label}>O que foi?</Text>
                 <TextInput style={styles.input} placeholder={novoTipo === 'entrada' ? "Ex: Salário, Venda..." : "Ex: Mercado, Uber..."} placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'} value={novaDescricao} onChangeText={setNovaDescricao} />
                 <Text style={styles.label}>Categoria</Text>
@@ -760,9 +772,9 @@ export default function App() {
 }
 
 const dynamicStyles = (isDark) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
-  scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 12 : 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  container: { flex: 1, backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
+  scrollContent: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#F1F5F9' },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 12 : 15, paddingBottom: 15, backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#E2E8F0' },
   topBarTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   topBarIcon: { padding: 5 },
   notificationBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: isDark ? '#1E293B' : '#FFFFFF' },
@@ -781,7 +793,7 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   grupoTotal: { fontSize: 16, fontWeight: 'bold' },
   grupoConteudo: { backgroundColor: isDark ? '#0F172A' : '#FAFAFA', borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', padding: 10 },
   cardContainerGrouped: { marginBottom: 8 },
-  listCardGrouped: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 15, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 2, elevation: 1 },
+  listCardGrouped: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 15, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   calendarioOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
   metasHeader: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, marginHorizontal: 20, marginTop: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   metasHeaderLabel: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', fontWeight: '600' },
@@ -810,7 +822,7 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   biometriaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? '#334155' : '#F1F5F9', padding: 15, borderRadius: 12, marginTop: 10 },
   labelBiometria: { fontSize: 16, fontWeight: '600', color: isDark ? '#F8FAFC' : '#1E293B' },
   dicaBiometria: { fontSize: 12, color: isDark ? '#94A3B8' : '#94A3B8', marginTop: 8, marginBottom: 15, paddingHorizontal: 5 },
-  perfilHeader: { alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 40, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#F1F5F9' },
+  perfilHeader: { alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 40, borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#E2E8F0' },
   perfilAvatarGiga: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
   perfilNomeGiga: { fontSize: 24, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   perfilEmailGiga: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 },
@@ -863,7 +875,7 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   monthPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
   monthPillText: { fontSize: 14, fontWeight: '600', color: isDark ? '#F8FAFC' : '#1E293B' },
   cardsContainer: { paddingHorizontal: 20, gap: 12, marginBottom: 25 },
-  summaryCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderRadius: 16 },
+  summaryCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   summaryLabel: { fontSize: 13, fontWeight: '600', marginBottom: 5 },
   summaryValue: { fontSize: 22, fontWeight: 'bold' },
   visaoGeralSection: { paddingHorizontal: 20, marginBottom: 25 },
@@ -873,7 +885,7 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   chartLabel: { fontSize: 14, color: isDark ? '#94A3B8' : '#64748B', marginBottom: 15, textAlign: 'center' },
   barraFundo: { width: '100%', height: 16, backgroundColor: '#10B981', borderRadius: 8, overflow: 'hidden' },
   barraProgresso: { height: '100%', backgroundColor: '#EF4444', borderRadius: 8 },
-  extratoContainer: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#FAFAFA' },
+  extratoContainer: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#F1F5F9' },
   extratoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginTop: 20, marginBottom: 10 },
   extratoTitle: { fontSize: 22, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B' },
   extratoSubtitle: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 },
@@ -885,7 +897,7 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   extratoResumoLabel: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', marginBottom: 4 },
   extratoResumoValor: { fontSize: 16, fontWeight: 'bold' },
   textoVazio: { textAlign: 'center', color: isDark ? '#64748B' : '#94A3B8', marginTop: 30, fontSize: 15 },
-  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', position: 'absolute', bottom: 0, width: '100%', zIndex: 10 },
+  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 25 : 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#E2E8F0', position: 'absolute', bottom: 0, width: '100%', zIndex: 10 },
   navItem: { alignItems: 'center', flex: 1 },
   navText: { fontSize: 10, color: isDark ? '#64748B' : '#94A3B8', marginTop: 4, fontWeight: '500' },
   navTextAtivo: { color: '#3B82F6', fontWeight: 'bold' },
