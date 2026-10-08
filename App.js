@@ -92,11 +92,15 @@ export default function App() {
     } catch (e) { console.log(e); }
   };
 
-  const carregarDadosNuvem = async (userId) => {
+ const carregarDadosNuvem = async (userId) => {
     try {
       const { data, error } = await supabase.from('transacoes').select('*').eq('user_id', userId).order('created_at', { ascending: false });
       if (data && !error) {
-        setTransacoes(data.map(t => ({ id: t.id, descricao: t.descricao, valor: Number(t.valor), tipo: t.tipo, categoria: t.categoria, modalidade: t.modalidade, dataCompra: t.data_compra, dataVencimento: t.data_vencimento, fixado: t.fixado })));
+        setTransacoes(data.map(t => ({ 
+          id: t.id, descricao: t.descricao, valor: Number(t.valor), tipo: t.tipo, categoria: t.categoria, modalidade: t.modalidade, 
+          dataCompra: t.data_compra, dataVencimento: t.data_vencimento, fixado: t.fixado, 
+          pago: t.pago
+        })));
       }
     } catch (e) { console.log(e); }
   };
@@ -276,13 +280,13 @@ export default function App() {
     if (Platform.OS === 'web') { if (window.confirm("Apagar?")) deletar(); } else { Alert.alert("Excluir", "Apagar?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
   };
   
-  const alternarFixar = async (id) => { 
+const alternarPago = async (id) => { 
     setTransacoes(prev => {
       const item = prev.find(t => t.id === id); 
       if (!item) return prev; 
-      const novo = !item.fixado;
-      supabase.from('transacoes').update({ fixado: novo }).eq('id', id).then();
-      return prev.map(t => t.id === id ? { ...t, fixado: novo } : t);
+      const novoStatus = !item.pago;
+      supabase.from('transacoes').update({ pago: novoStatus }).eq('id', id).then();
+      return prev.map(t => t.id === id ? { ...t, pago: novoStatus } : t);
     });
   };
   
@@ -341,14 +345,43 @@ export default function App() {
     const gruposArray = Object.values(mapaGrupos).sort((a,b) => (b.totalSaida + b.totalEntrada) - (a.totalSaida + a.totalEntrada));
     const alternarCategoria = (catNome) => { setCategoriasExpandidas(prev => ({ ...prev, [catNome]: !prev[catNome] })); };
     
+const renderExtrato = () => {
+    // Dividimos as transações do mês entre Pendentes e Pagas
+    const transacoesPendentes = transacoesOrdenadasDoMes.filter(t => !t.pago);
+    const transacoesPagas = transacoesOrdenadasDoMes.filter(t => t.pago);
+
     const renderCardTransacao = (item) => (
       <View key={item.id} style={styles.cardContainerGrouped}>
-        <View style={[styles.listCardGrouped, item.fixado && styles.cardFixado, { flexDirection: 'column', alignItems: 'stretch' }]}>
+        <View style={[
+          styles.listCardGrouped, 
+          item.fixado && styles.cardFixado, 
+          item.pago && { borderLeftWidth: 4, borderLeftColor: '#10B981' }, // <-- O traço verde elegante aqui!
+          { flexDirection: 'column', alignItems: 'stretch' }
+        ]}>
           <TouchableOpacity activeOpacity={0.8} onPress={() => mostrarDetalhes(item)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={styles.listCardInfo}><View style={{ flexDirection: 'row', alignItems: 'center' }}>{item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}<Text style={styles.listCardTitle}>{item.descricao}</Text></View><Text style={styles.dataVencimentoText}>{item.dataCompra}</Text></View>
-            <View style={{ alignItems: 'flex-end' }}><Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>{item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}</Text></View>
+            <View style={styles.listCardInfo}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}
+                <Text style={styles.listCardTitle}>{item.descricao}</Text>
+              </View>
+              <Text style={styles.dataVencimentoText}>{item.dataCompra} • {item.categoria}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>
+                {item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}
+              </Text>
+            </View>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 12 }}>
+            
+            {/* NOVO BOTÃO DE DAR BAIXA / DESFAZER */}
+            <TouchableOpacity onPress={() => alternarPago(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
+              <Feather name={item.pago ? "x-circle" : "check-circle"} size={14} color={item.pago ? "#94A3B8" : "#10B981"} />
+              <Text style={{ fontSize: 12, color: item.pago ? "#94A3B8" : "#10B981", marginLeft: 6, fontWeight: '600' }}>
+                {item.pago ? "Desfazer" : "Dar Baixa"}
+              </Text>
+            </TouchableOpacity>
+
             <TouchableOpacity onPress={() => alternarFixar(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather name="pin" size={14} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginLeft: 6, fontWeight: '600' }}>Fixar</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather name="edit-2" size={14} color="#3B82F6" /><Text style={{ fontSize: 12, color: "#3B82F6", marginLeft: 6, fontWeight: '600' }}>Editar</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}><Feather name="trash-2" size={14} color="#EF4444" /><Text style={{ fontSize: 12, color: "#EF4444", marginLeft: 6, fontWeight: '600' }}>Apagar</Text></TouchableOpacity>
@@ -359,19 +392,35 @@ export default function App() {
 
     return (
       <ScrollView style={styles.extratoContainer} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View style={styles.extratoHeader}><View><Text style={styles.extratoTitle}>Extrato Agrupado</Text><Text style={styles.extratoSubtitle}>Movimentações organizadas</Text></View><TouchableOpacity style={styles.btnExportar} onPress={() => Platform.OS === 'web' ? window.alert('Gerando PDF...') : Alert.alert('Exportar Extrato', `Gerando PDF...`)}><Feather name="file-text" size={18} color="#FFF" /><Text style={styles.btnExportarText}>Gerar PDF</Text></TouchableOpacity></View>
-        <View style={styles.extratoMonthSelector}><TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color={iconColor} style={{ marginLeft: 5 }} /></TouchableOpacity></View>
+        <View style={styles.extratoHeader}>
+          <View><Text style={styles.extratoTitle}>Extrato</Text><Text style={styles.extratoSubtitle}>Movimentações do mês</Text></View>
+          <TouchableOpacity style={styles.btnExportar} onPress={() => Platform.OS === 'web' ? window.alert('Gerando PDF...') : Alert.alert('Exportar Extrato', `Gerando PDF...`)}><Feather name="file-text" size={18} color="#FFF" /><Text style={styles.btnExportarText}>Gerar PDF</Text></TouchableOpacity>
+        </View>
+        
+        <View style={styles.extratoMonthSelector}>
+          <TouchableOpacity style={styles.monthPill} onPress={abrirSeletorMes}><Text style={styles.monthPillText}>{mesAtualNome} / {anoAtual}</Text><Feather name="chevron-down" size={16} color={iconColor} style={{ marginLeft: 5 }} /></TouchableOpacity>
+        </View>
+        
         <View style={{ paddingHorizontal: 20, paddingBottom: 120, marginTop: 10 }}>
-           {gruposArray.length === 0 ? (<Text style={styles.textoVazio}>Nenhuma movimentação neste mês.</Text>) : (gruposArray.map(grupo => {
-                 const isExpandido = categoriasExpandidas[grupo.nome]; const saldoFinalCategoria = grupo.totalEntrada - grupo.totalSaida;
-                 return (
-                    <View key={grupo.nome} style={styles.grupoContainer}>
-                       <TouchableOpacity style={styles.grupoHeader} onPress={() => alternarCategoria(grupo.nome)} activeOpacity={0.8}><View style={{flexDirection: 'row', alignItems: 'center'}}><View style={[styles.catBolinha, { backgroundColor: grupo.cor }]} /><Text style={styles.grupoTitulo}>{grupo.nome}</Text><Text style={styles.grupoQtd}>({grupo.transacoes.length})</Text></View><View style={{flexDirection: 'row', alignItems: 'center'}}><Text style={[styles.grupoTotal, saldoFinalCategoria >= 0 ? styles.verde : styles.vermelho]}>R$ {Math.abs(saldoFinalCategoria).toFixed(2)}</Text><Feather name={isExpandido ? "chevron-up" : "chevron-down"} size={20} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{marginLeft: 10}} /></View></TouchableOpacity>
-                       {isExpandido && (<View style={styles.grupoConteudo}>{grupo.transacoes.map(t => renderCardTransacao(t))}</View>)}
-                    </View>
-                 )
-              })
-           )}
+          
+          {/* SESSÃO DE PENDENTES */}
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: isDarkMode ? '#F8FAFC' : '#1E293B', marginBottom: 15, marginTop: 5 }}>⏳ Pendentes</Text>
+          {transacoesPendentes.length === 0 ? (
+            <Text style={styles.textoVazio}>Tudo em dia! Nenhuma pendência.</Text>
+          ) : (
+            transacoesPendentes.map(t => renderCardTransacao(t))
+          )}
+
+          {/* SESSÃO DE PAGAS (O "outro local" que você pediu) */}
+          <View style={{ marginTop: 30, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#E2E8F0', paddingTop: 20 }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: isDarkMode ? '#94A3B8' : '#64748B', marginBottom: 15 }}>✅ Contas Pagas</Text>
+            {transacoesPagas.length === 0 ? (
+              <Text style={styles.textoVazio}>Nenhuma conta paga este mês.</Text>
+            ) : (
+              transacoesPagas.map(t => renderCardTransacao(t))
+            )}
+          </View>
+
         </View>
       </ScrollView>
     );
