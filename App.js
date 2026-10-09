@@ -35,7 +35,6 @@ export default function App() {
   const [categorias, setCategorias] = useState([]);
   const [transacoes, setTransacoes] = useState([]);
 
-  // Função de Reembolso Futuro
   const [gerarReembolso, setGerarReembolso] = useState(false);
 
   useEffect(() => {
@@ -150,7 +149,7 @@ export default function App() {
   const [calAno, setCalAno] = useState(dataHoje.getFullYear());
 
   const nomesMeses = { '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril', '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto', '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro' };
-  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, nome: 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
+  const mesesAbreviados = [{ num: 1, nome: 'Jan' }, { num: 2, nome: 'Fev' }, { num: 3, nome: 'Mar' }, { num: 4, nome: 'Abr' }, { num: 5, nome: 'Mai' }, { num: 6, nome: 'Jun' }, { num: 7, nome: 'Jul' }, { num: 8, 'nome': 'Ago' }, { num: 9, nome: 'Set' }, { num: 10, nome: 'Out' }, { num: 11, nome: 'Nov' }, { num: 12, nome: 'Dez' }];
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -254,16 +253,15 @@ export default function App() {
       let novas = [];
       if (novoTipo === 'saida' && novaModalidade === 'parcelada') {
         const nParcelas = Math.max(parseInt(qtdParcelas, 10) || 2, 2); const vParc = parseFloat((valorTotal / nParcelas).toFixed(2));
-        for (let i = 0; i < nParcelas; i++) { novas.push({ id: `${Date.now()}_${i}`, user_id: session.user.id, descricao: `${novaDescricao} [${i + 1}/${nParcelas}]`, valor: vParc, tipo: 'saida', modalidade: 'parcelada', categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: somarMesesData(vencimentoBase, i), fixado: false, pago: i === 0 ? true : false }); }
+        for (let i = 0; i < nParcelas; i++) { novas.push({ id: `${Date.now()}_${i}`, user_id: session.user.id, descricao: `${novaDescricao} [${i + 1}/${nParcelas}]`, valor: vParc, tipo: 'saida', modalidade: 'parcelada', categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: somarMesesData(vencimentoBase, i), pago: i === 0 ? true : false }); }
       } else if (novoTipo === 'saida' && novaModalidade === 'fixa') {
-        for (let i = 0; i < 12; i++) { novas.push({ id: `${Date.now()}_fixa_${i}`, user_id: session.user.id, descricao: `${novaDescricao} (Fixa)`, valor: valorTotal, tipo: 'saida', modalidade: 'fixa', categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: somarMesesData(vencimentoBase, i), fixado: false, pago: false }); }
+        for (let i = 0; i < 12; i++) { novas.push({ id: `${Date.now()}_fixa_${i}`, user_id: session.user.id, descricao: `${novaDescricao} (Fixa)`, valor: valorTotal, tipo: 'saida', modalidade: 'fixa', categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: somarMesesData(vencimentoBase, i), pago: false }); }
       } else {
-        novas.push({ id: Date.now().toString(), user_id: session.user.id, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: vencimentoBase, fixado: false, pago: novoTipo === 'entrada' ? true : false });
+        novas.push({ id: Date.now().toString(), user_id: session.user.id, descricao: novaDescricao, valor: valorTotal, tipo: novoTipo, modalidade: novoTipo === 'entrada' ? 'a_vista' : novaModalidade, categoria: novaCategoriaForm, data_compra: dataBaseCompra, data_vencimento: vencimentoBase, pago: novoTipo === 'entrada' ? true : false });
         
-        // A Mágica do Reembolso Futuro
         if (novoTipo === 'saida' && gerarReembolso) {
           const dataReem = somarMesesData(vencimentoBase, 1);
-          novas.push({ id: Date.now().toString() + '_reembolso', user_id: session.user.id, descricao: `[Reembolso] ${novaDescricao}`, valor: valorTotal, tipo: 'entrada', modalidade: 'a_vista', categoria: 'Renda', data_compra: dataReem, data_vencimento: dataReem, fixado: false, pago: false });
+          novas.push({ id: Date.now().toString() + '_reembolso', user_id: session.user.id, descricao: `[Reembolso] ${novaDescricao}`, valor: valorTotal, tipo: 'entrada', modalidade: 'a_vista', categoria: 'Renda', data_compra: dataReem, data_vencimento: dataReem, pago: false });
         }
       }
       const { error } = await supabase.from('transacoes').insert(novas);
@@ -343,7 +341,7 @@ export default function App() {
     const transacoesPendentes = transacoesOrdenadasDoMes.filter(t => !t.pago);
     const transacoesPagas = transacoesOrdenadasDoMes.filter(t => t.pago);
 
-    // 2. Agrupar apenas as Pendentes por categoria (Etiquetas originais)
+    // 2. Agrupar APENAS as Pendentes por categoria (Etiquetas originais)
     let mapaGrupos = {};
     transacoesPendentes.forEach(t => {
       if (!mapaGrupos[t.categoria]) {
