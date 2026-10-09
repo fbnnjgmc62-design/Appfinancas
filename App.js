@@ -35,7 +35,7 @@ export default function App() {
   const [categorias, setCategorias] = useState([]);
   const [transacoes, setTransacoes] = useState([]);
 
-  // Estados para as Novas Funções
+  // Função de Reembolso Futuro
   const [gerarReembolso, setGerarReembolso] = useState(false);
 
   useEffect(() => {
@@ -98,8 +98,7 @@ export default function App() {
       if (data && !error) {
         setTransacoes(data.map(t => ({ 
           id: t.id, descricao: t.descricao, valor: Number(t.valor), tipo: t.tipo, categoria: t.categoria, modalidade: t.modalidade, 
-          dataCompra: t.data_compra, dataVencimento: t.data_vencimento, fixado: t.fixado, 
-          pago: t.pago // <-- A coluna nova mapeada aqui
+          dataCompra: t.data_compra, dataVencimento: t.data_vencimento, pago: t.pago
         })));
       }
     } catch (e) { console.log(e); }
@@ -166,7 +165,7 @@ export default function App() {
     return true;
   });
 
-  const transacoesOrdenadasDoMes = [...transacoesDoMes].sort((a, b) => { if (a.fixado && !b.fixado) return -1; if (!a.fixado && b.fixado) return 1; return 0; });
+  const transacoesOrdenadasDoMes = [...transacoesDoMes];
   const receitas = transacoesDoMes.filter(t => t.tipo === 'entrada').reduce((acc, t) => acc + t.valor, 0);
   const despesas = transacoesDoMes.filter(t => t.tipo === 'saida').reduce((acc, t) => acc + t.valor, 0);
   const saldo = receitas - despesas;
@@ -278,17 +277,6 @@ export default function App() {
     if (Platform.OS === 'web') { if (window.confirm("Apagar?")) deletar(); } else { Alert.alert("Excluir", "Apagar?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); }
   };
   
-  const alternarFixar = async (id) => { 
-    setTransacoes(prev => {
-      const item = prev.find(t => t.id === id); 
-      if (!item) return prev; 
-      const novo = !item.fixado;
-      supabase.from('transacoes').update({ fixado: novo }).eq('id', id).then();
-      return prev.map(t => t.id === id ? { ...t, fixado: novo } : t);
-    });
-  };
-
-  // Nova função para dar baixa no Extrato
   const alternarPago = async (id) => { 
     setTransacoes(prev => {
       const item = prev.find(t => t.id === id); 
@@ -306,12 +294,11 @@ export default function App() {
   const fecharModalMeta = () => { setModalNovaMetaVisivel(false); setIdEditandoMeta(null); setNovaMetaTitulo(''); setNovaMetaAlvo(''); setNovaMetaValorAtual(''); setNovaMetaCategoria('Outros'); setNovaMetaModalidade('a_vista'); setNovaMetaMeioPagamento('Pix'); setNovaMetaQtdParcelas('2'); setNovaMetaOrigemConta('Conta Corrente'); setNovaMetaDataAlvo(''); setCalendarioVisivel(false); };
   const abrirEdicaoMeta = (meta) => { setIdEditandoMeta(meta.id); setNovaMetaTitulo(meta.titulo); setNovaMetaAlvo(meta.valorAlvo.toString()); setNovaMetaValorAtual(meta.valorAtual ? meta.valorAtual.toString() : '0'); setNovaMetaCategoria(meta.categoria || 'Outros'); setNovaMetaModalidade(meta.modalidade || 'a_vista'); setNovaMetaMeioPagamento(meta.meioPagamento || 'Pix'); setNovaMetaQtdParcelas(meta.qtdParcelas || '2'); setNovaMetaOrigemConta(meta.origemConta || 'Conta Corrente'); setNovaMetaDataAlvo(meta.dataAlvo || ''); setModalNovaMetaVisivel(true); };
   const excluirMeta = (id) => { const deletar = () => atualizarMetas(metas.filter(m => m.id !== id)); if (Platform.OS === 'web') { if (window.confirm("Apagar meta?")) deletar(); } else { Alert.alert("Excluir", "Apagar meta?", [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", style: "destructive", onPress: deletar }]); } };
-  const alternarFixarMeta = (id) => { atualizarMetas(metas.map(m => m.id === id ? { ...m, fixado: !m.fixado } : m)); };
   
   const salvarMeta = () => {
     if (!novaMetaTitulo || !novaMetaAlvo || !novaMetaDataAlvo) return;
     const cat = categorias.find(c => c.nome === novaMetaCategoria); const objMeta = { titulo: novaMetaTitulo, valorAlvo: parseFloat(novaMetaAlvo.replace(',', '.')), categoria: novaMetaCategoria, modalidade: novaMetaModalidade, meioPagamento: novaMetaMeioPagamento, qtdParcelas: novaMetaModalidade === 'parcelada' ? novaMetaQtdParcelas : null, origemConta: novaMetaOrigemConta, dataAlvo: novaMetaDataAlvo, cor: cat ? cat.cor : '#3B82F6' };
-    if (idEditandoMeta) { atualizarMetas(metas.map(m => m.id === idEditandoMeta ? { ...m, ...objMeta, valorAtual: parseFloat((novaMetaValorAtual || '0').replace(',', '.')) } : m)); } else { atualizarMetas([{ id: Date.now().toString(), ...objMeta, valorAtual: 0, fixado: false }, ...metas]); }
+    if (idEditandoMeta) { atualizarMetas(metas.map(m => m.id === idEditandoMeta ? { ...m, ...objMeta, valorAtual: parseFloat((novaMetaValorAtual || '0').replace(',', '.')) } : m)); } else { atualizarMetas([{ id: Date.now().toString(), ...objMeta, valorAtual: 0 }, ...metas]); }
     fecharModalMeta();
   };
 
@@ -320,7 +307,7 @@ export default function App() {
     atualizarMetas(metas.map(m => m.id === metaSelecionada.id ? { ...m, valorAtual: m.valorAtual + valorNum } : m));
     if (origemDeposito === 'carteira') {
       const hoje = new Date(); const df = `${hoje.getDate().toString().padStart(2, '0')}/${(hoje.getMonth() + 1).toString().padStart(2, '0')}/${hoje.getFullYear()}`;
-      const novaDep = { id: Date.now().toString() + '_dep', user_id: session.user.id, descricao: `Depósito: ${metaSelecionada.titulo}`, valor: valorNum, tipo: 'saida', modalidade: 'a_vista', categoria: metaSelecionada.categoria || 'Outros', data_compra: df, data_vencimento: df, fixado: false, pago: true };
+      const novaDep = { id: Date.now().toString() + '_dep', user_id: session.user.id, descricao: `Depósito: ${metaSelecionada.titulo}`, valor: valorNum, tipo: 'saida', modalidade: 'a_vista', categoria: metaSelecionada.categoria || 'Outros', data_compra: df, data_vencimento: df, pago: true };
       const { error } = await supabase.from('transacoes').insert([novaDep]);
       if (!error) setTransacoes(prev => [{...novaDep, dataCompra: df, dataVencimento: df}, ...prev]);
     }
@@ -332,7 +319,6 @@ export default function App() {
   const salvarEdicaoPerfil = async () => { try { await AsyncStorage.setItem('@perfilNome', perfilNome); setModalEditarPerfilVisivel(false); } catch (e) { } };
   const getTopBarTitle = () => { if (abaAtual === 'dashboard') return 'Dashboard'; if (abaAtual === 'extrato') return 'Extrato'; if (abaAtual === 'perfil') return 'Meu Perfil'; if (abaAtual === 'visao_anual') return 'Relatórios'; if (abaAtual === 'metas') return 'Minhas Metas'; return 'Dashboard'; };
 
-  // Definição dos estilos dinâmicos (a base)
   const styles = dynamicStyles(isDarkMode);
   const iconColor = isDarkMode ? "#F8FAFC" : "#1E293B";
 
@@ -353,48 +339,78 @@ export default function App() {
   );
 
   const renderExtrato = () => {
-    // Dividimos as transações do mês entre Pendentes e Pagas
+    // 1. Separar as transações entre Pendentes e Pagas
     const transacoesPendentes = transacoesOrdenadasDoMes.filter(t => !t.pago);
     const transacoesPagas = transacoesOrdenadasDoMes.filter(t => t.pago);
 
-    const renderCardTransacao = (item) => (
-      <View key={item.id} style={styles.cardContainerGrouped}>
-        <View style={[
-          styles.listCardGrouped, 
-          item.fixado && styles.cardFixado, 
-          item.pago && { borderLeftWidth: 4, borderLeftColor: '#10B981' }, 
-          { flexDirection: 'column', alignItems: 'stretch' }
-        ]}>
-          <TouchableOpacity activeOpacity={0.8} onPress={() => mostrarDetalhes(item)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={styles.listCardInfo}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {item.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}
-                <Text style={styles.listCardTitle}>{item.descricao}</Text>
-              </View>
-              <Text style={styles.dataVencimentoText}>{item.dataCompra} • {item.categoria}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>
-                {item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 12 }}>
-            
-            <TouchableOpacity onPress={() => alternarPago(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
-              <Feather name={item.pago ? "x-circle" : "check-circle"} size={14} color={item.pago ? "#94A3B8" : "#10B981"} />
-              <Text style={{ fontSize: 12, color: item.pago ? "#94A3B8" : "#10B981", marginLeft: 6, fontWeight: '600' }}>
-                {item.pago ? "Desfazer" : "Dar Baixa"}
-              </Text>
-            </TouchableOpacity>
+    // 2. Agrupar apenas as Pendentes por categoria (Etiquetas originais)
+    let mapaGrupos = {};
+    transacoesPendentes.forEach(t => {
+      if (!mapaGrupos[t.categoria]) {
+        const catObj = categorias.find(c => c.nome === t.categoria);
+        mapaGrupos[t.categoria] = {
+          nome: t.categoria,
+          cor: catObj ? catObj.cor : '#94A3B8',
+          transacoes: [],
+          totalEntrada: 0,
+          totalSaida: 0
+        };
+      }
+      mapaGrupos[t.categoria].transacoes.push(t);
+      if (t.tipo === 'entrada') mapaGrupos[t.categoria].totalEntrada += t.valor;
+      else mapaGrupos[t.categoria].totalSaida += t.valor;
+    });
+    
+    const gruposArray = Object.values(mapaGrupos).sort((a,b) => (b.totalSaida + b.totalEntrada) - (a.totalSaida + a.totalEntrada));
+    const alternarCategoria = (catNome) => { setCategoriasExpandidas(prev => ({ ...prev, [catNome]: !prev[catNome] })); };
 
-            <TouchableOpacity onPress={() => alternarFixar(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather name="pin" size={14} color={isDarkMode ? '#94A3B8' : '#64748B'} /><Text style={{ fontSize: 12, color: isDarkMode ? '#94A3B8' : '#64748B', marginLeft: 6, fontWeight: '600' }}>Fixar</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather name="edit-2" size={14} color="#3B82F6" /><Text style={{ fontSize: 12, color: "#3B82F6", marginLeft: 6, fontWeight: '600' }}>Editar</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}><Feather name="trash-2" size={14} color="#EF4444" /><Text style={{ fontSize: 12, color: "#EF4444", marginLeft: 6, fontWeight: '600' }}>Apagar</Text></TouchableOpacity>
+    // 3. Cartão de transação (Com a tag estilo Wpp Business para as pagas)
+    const renderCardTransacao = (item, mostrarTag = false) => {
+      const catObj = categorias.find(c => c.nome === item.categoria);
+      const corCategoria = catObj ? catObj.cor : '#3B82F6';
+
+      return (
+        <View key={item.id} style={styles.cardContainerGrouped}>
+          <View style={[
+            styles.listCardGrouped, 
+            item.pago && { borderLeftWidth: 4, borderLeftColor: '#10B981' }, 
+            { flexDirection: 'column', alignItems: 'stretch' }
+          ]}>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => mostrarDetalhes(item)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={styles.listCardInfo}>
+                <Text style={styles.listCardTitle}>{item.descricao}</Text>
+                <Text style={styles.dataVencimentoText}>{item.dataCompra}</Text>
+                
+                {/* Etiqueta estilo WhatsApp Business para as contas pagas */}
+                {mostrarTag && (
+                  <View style={[styles.tagWpp, { backgroundColor: corCategoria }]}>
+                    <Text style={styles.tagWppTexto}>{item.categoria}</Text>
+                  </View>
+                )}
+              </View>
+              
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.listCardValue, item.tipo === 'entrada' ? styles.verde : styles.vermelho]}>
+                  {item.tipo === 'entrada' ? '+ ' : '- '}R$ {item.valor.toFixed(2)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#F1F5F9', paddingTop: 12 }}>
+              <TouchableOpacity onPress={() => alternarPago(item.id)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}>
+                <Feather name={item.pago ? "x-circle" : "check-circle"} size={14} color={item.pago ? "#94A3B8" : "#10B981"} />
+                <Text style={{ fontSize: 12, color: item.pago ? "#94A3B8" : "#10B981", marginLeft: 6, fontWeight: '600' }}>
+                  {item.pago ? "Desfazer" : "Dar Baixa"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => abrirEdicao(item)} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15 }}><Feather name="edit-2" size={14} color="#3B82F6" /><Text style={{ fontSize: 12, color: "#3B82F6", marginLeft: 6, fontWeight: '600' }}>Editar</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => excluirTransacao(item.id)} style={{ flexDirection: 'row', alignItems: 'center' }}><Feather name="trash-2" size={14} color="#EF4444" /><Text style={{ fontSize: 12, color: "#EF4444", marginLeft: 6, fontWeight: '600' }}>Apagar</Text></TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
-    );
+      );
+    };
 
     return (
       <ScrollView style={styles.extratoContainer} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
@@ -410,10 +426,29 @@ export default function App() {
         <View style={{ paddingHorizontal: 20, paddingBottom: 120, marginTop: 10 }}>
           
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: isDarkMode ? '#F8FAFC' : '#1E293B', marginBottom: 15, marginTop: 5 }}>⏳ Pendentes</Text>
-          {transacoesPendentes.length === 0 ? (
+          {gruposArray.length === 0 ? (
             <Text style={styles.textoVazio}>Tudo em dia! Nenhuma pendência.</Text>
           ) : (
-            transacoesPendentes.map(t => renderCardTransacao(t))
+            gruposArray.map(grupo => {
+              const isExpandido = categoriasExpandidas[grupo.nome]; 
+              const saldoFinalCategoria = grupo.totalEntrada - grupo.totalSaida;
+              return (
+                <View key={grupo.nome} style={styles.grupoContainer}>
+                  <TouchableOpacity style={styles.grupoHeader} onPress={() => alternarCategoria(grupo.nome)} activeOpacity={0.8}>
+                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                      <View style={[styles.catBolinha, { backgroundColor: grupo.cor }]} />
+                      <Text style={styles.grupoTitulo}>{grupo.nome}</Text>
+                      <Text style={styles.grupoQtd}>({grupo.transacoes.length})</Text>
+                    </View>
+                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                      <Text style={[styles.grupoTotal, saldoFinalCategoria >= 0 ? styles.verde : styles.vermelho]}>R$ {Math.abs(saldoFinalCategoria).toFixed(2)}</Text>
+                      <Feather name={isExpandido ? "chevron-up" : "chevron-down"} size={20} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{marginLeft: 10}} />
+                    </View>
+                  </TouchableOpacity>
+                  {isExpandido && (<View style={styles.grupoConteudo}>{grupo.transacoes.map(t => renderCardTransacao(t, false))}</View>)}
+                </View>
+              )
+            })
           )}
 
           <View style={{ marginTop: 30, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#E2E8F0', paddingTop: 20 }}>
@@ -421,7 +456,7 @@ export default function App() {
             {transacoesPagas.length === 0 ? (
               <Text style={styles.textoVazio}>Nenhuma conta paga este mês.</Text>
             ) : (
-              transacoesPagas.map(t => renderCardTransacao(t))
+              transacoesPagas.map(t => renderCardTransacao(t, true))
             )}
           </View>
 
@@ -522,7 +557,6 @@ export default function App() {
 
   const renderMetas = () => {
     const totalGuardadoGeral = metas.reduce((acc, m) => acc + (m.valorAtual || 0), 0);
-    const metasOrdenadas = [...metas].sort((a, b) => { if (a.fixado && !b.fixado) return -1; if (!a.fixado && b.fixado) return 1; return 0; });
     return (
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <View style={styles.metasHeader}>
@@ -530,13 +564,13 @@ export default function App() {
           <Text style={styles.metasHeaderValor}>R$ {totalGuardadoGeral.toFixed(2)}</Text>
           <TouchableOpacity style={styles.btnNovaMeta} onPress={() => setModalNovaMetaVisivel(true)}><Feather name="plus-circle" size={20} color="#FFF" /><Text style={styles.btnNovaMetaTexto}>Criar Nova Meta</Text></TouchableOpacity>
         </View>
-        {metasOrdenadas.map((meta) => { 
+        {metas.map((meta) => { 
           const porcentagem = Math.min(((meta.valorAtual || 0) / (meta.valorAlvo || 1)) * 100, 100); 
           return (
             <View key={meta.id} style={styles.metaCardWrapper}>
-              <View style={[styles.metaCard, meta.fixado && styles.cardFixado]}>
+              <View style={styles.metaCard}>
                 <View style={styles.metaCardHeader}>
-                  <View style={{flexDirection: 'row', alignItems: 'center'}}>{meta.fixado && <Text style={{ marginRight: 5 }}>📌</Text>}<View style={{width: 14, height: 14, borderRadius: 7, backgroundColor: meta.cor, marginRight: 8}} /><Text style={styles.metaCardTitle}>{meta.titulo}</Text></View>
+                  <View style={{flexDirection: 'row', alignItems: 'center'}}><View style={{width: 14, height: 14, borderRadius: 7, backgroundColor: meta.cor, marginRight: 8}} /><Text style={styles.metaCardTitle}>{meta.titulo}</Text></View>
                   <Text style={[styles.metaCardPercent, {color: meta.cor}]}>{porcentagem.toFixed(0)}%</Text>
                 </View>
                 <View style={styles.metaTagsRow}>
@@ -555,7 +589,6 @@ export default function App() {
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#E2E8F0', paddingTop: 15 }}>
                   <View style={{ flexDirection: 'row' }}>
-                    <TouchableOpacity onPress={() => alternarFixarMeta(meta.id)} style={{ paddingRight: 15 }}><Feather name="pin" size={16} color={isDarkMode ? '#94A3B8' : '#64748B'} /></TouchableOpacity>
                     <TouchableOpacity onPress={() => abrirEdicaoMeta(meta)} style={{ paddingRight: 15 }}><Feather name="edit-2" size={16} color="#3B82F6" /></TouchableOpacity>
                     <TouchableOpacity onPress={() => excluirMeta(meta.id)}><Feather name="trash-2" size={16} color="#EF4444" /></TouchableOpacity>
                   </View>
@@ -840,6 +873,12 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   metaCard: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   avisoFixaContainer: { marginTop: 10, marginBottom: 15, backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', padding: 15, borderRadius: 12, alignItems: 'center' },
   avisoFixaTexto: { color: isDark ? '#93C5FD' : '#3B82F6', fontSize: 13, fontWeight: '600' },
+  grupoContainer: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 16, marginBottom: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, overflow: 'hidden' },
+  grupoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, backgroundColor: isDark ? '#1E293B' : '#FFFFFF' },
+  grupoTitulo: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F8FAFC' : '#1E293B', marginLeft: 10 },
+  grupoQtd: { fontSize: 14, color: isDark ? '#64748B' : '#94A3B8', marginLeft: 6 },
+  grupoTotal: { fontSize: 16, fontWeight: 'bold' },
+  grupoConteudo: { backgroundColor: isDark ? '#0F172A' : '#FAFAFA', borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#F1F5F9', padding: 10 },
   cardContainerGrouped: { marginBottom: 10 },
   listCardGrouped: { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 15, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   calendarioOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
@@ -951,7 +990,6 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   navTextAtivo: { color: '#3B82F6', fontWeight: 'bold' },
   fabWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fabBtn: { backgroundColor: '#3B82F6', width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 30, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
-  cardFixado: { borderLeftWidth: 4, borderLeftColor: '#3B82F6' },
   listCardInfo: { flex: 1 },
   listCardTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F8FAFC' : '#0F172A' },
   listCardCategory: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 },
@@ -991,5 +1029,7 @@ const dynamicStyles = (isDark) => StyleSheet.create({
   diaItem: { width: '14.2%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 2 },
   diaTexto: { fontSize: 14, color: isDark ? '#F8FAFC' : '#1E293B', fontWeight: '500' },
   btnFecharCal: { marginTop: 15, paddingVertical: 8, paddingHorizontal: 20, backgroundColor: isDark ? '#334155' : '#F1F5F9', borderRadius: 10 },
-  textoFecharCal: { color: isDark ? '#CBD5E1' : '#64748B', fontWeight: 'bold', fontSize: 13 }
+  textoFecharCal: { color: isDark ? '#CBD5E1' : '#64748B', fontWeight: 'bold', fontSize: 13 },
+  tagWpp: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, marginTop: 6, alignSelf: 'flex-start' },
+  tagWppTexto: { fontSize: 10, color: '#FFFFFF', fontWeight: 'bold' }
 });
